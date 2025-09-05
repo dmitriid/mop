@@ -21,7 +21,7 @@ struct KeyMappings {
 const KEYS: KeyMappings = KeyMappings {
     navigate: "↑↓: navigate",
     select_server: "enter: select server",
-    open: "enter: open",
+    open: "enter: play/open",
     back: "backspace: back",
     back_to_directory: "enter: back to directory",
     help: "?: help",
@@ -86,6 +86,78 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     if app.show_help {
         draw_help_modal(f);
     }
+}
+
+fn draw_file_info_panel(f: &mut Frame, app: &App, area: Rect) {
+    let mut info_lines = Vec::new();
+    
+    if let Some(item_idx) = app.selected_item {
+        if item_idx < app.directory_contents.len() {
+            let item = &app.directory_contents[item_idx];
+            
+            info_lines.push(Line::from(vec![
+                Span::styled("Name: ", Style::default().fg(Color::Cyan)),
+                Span::raw(&item.name),
+            ]));
+            
+            info_lines.push(Line::from(vec![
+                Span::styled("Type: ", Style::default().fg(Color::Cyan)),
+                Span::raw(if item.is_directory { "Directory" } else { "File" }),
+            ]));
+            
+            if let Some(url) = &item.url {
+                info_lines.push(Line::from(""));
+                info_lines.push(Line::from(vec![
+                    Span::styled("URL: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                ]));
+                // Split long URLs into multiple lines
+                let url_lines = wrap_text(url, area.width.saturating_sub(4) as usize);
+                for line in url_lines {
+                    info_lines.push(Line::from(vec![
+                        Span::raw("  "),
+                        Span::raw(line),
+                    ]));
+                }
+            }
+            
+            if let Some(metadata) = &item.metadata {
+                info_lines.push(Line::from(""));
+                info_lines.push(Line::from(vec![
+                    Span::styled("Metadata:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                ]));
+                
+                if let Some(size) = metadata.size {
+                    info_lines.push(Line::from(vec![
+                        Span::raw("  Size: "),
+                        Span::raw(format_size(size)),
+                    ]));
+                }
+                
+                if let Some(duration) = &metadata.duration {
+                    info_lines.push(Line::from(vec![
+                        Span::raw("  Duration: "),
+                        Span::raw(duration),
+                    ]));
+                }
+                
+                if let Some(format) = &metadata.format {
+                    info_lines.push(Line::from(vec![
+                        Span::raw("  Format: "),
+                        Span::raw(format),
+                    ]));
+                }
+            }
+        }
+    } else {
+        info_lines.push(Line::from(vec![
+            Span::styled("No item selected", Style::default().fg(Color::Gray)),
+        ]));
+    }
+    
+    let info = Paragraph::new(info_lines)
+        .block(Block::default().borders(Borders::ALL).title("File Info"))
+        .wrap(ratatui::widgets::Wrap { trim: true });
+    f.render_widget(info, area);
 }
 
 fn draw_error_panel(f: &mut Frame, app: &App, area: Rect) {
@@ -160,6 +232,15 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect, help_text: &str) {
                 format!("/{}", app.current_directory.join("/"))
             };
 
+            // Split area into directory list and file info panel
+            let [list_area, info_area] = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(60),  // Directory list
+                    Constraint::Percentage(40),  // File info panel
+                ])
+                .split(area)[..] else { return };
+
             let items: Vec<ListItem> = app
                 .directory_contents
                 .iter()
@@ -191,7 +272,10 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect, help_text: &str) {
             let mut list_state = ListState::default();
             list_state.select(app.selected_item);
             
-            f.render_stateful_widget(list, area, &mut list_state);
+            f.render_stateful_widget(list, list_area, &mut list_state);
+            
+            // Draw file info panel
+            draw_file_info_panel(f, app, info_area);
         },
         AppState::FileDetails => {
             if let Some(item_idx) = app.selected_item {
@@ -274,7 +358,8 @@ fn draw_help_modal(f: &mut Frame) {
         ]),
         Line::from(""),
         Line::from("Vibecoded for Omarchy: discover UPnP devices and"),
-        Line::from("browse media content directly."),
+        Line::from("browse media content directly. Press Enter on"),
+        Line::from("files to play them with mpv."),
         Line::from(""),
         Line::from(vec![
             Span::styled("Keys:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
@@ -297,6 +382,33 @@ fn draw_help_modal(f: &mut Frame) {
         .alignment(Alignment::Center);
     
     f.render_widget(paragraph, modal_area);
+}
+
+fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
+    if text.len() <= max_width {
+        return vec![text.to_string()];
+    }
+    
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+    
+    for word in text.split_whitespace() {
+        if current_line.is_empty() {
+            current_line = word.to_string();
+        } else if current_line.len() + 1 + word.len() <= max_width {
+            current_line.push(' ');
+            current_line.push_str(word);
+        } else {
+            lines.push(current_line);
+            current_line = word.to_string();
+        }
+    }
+    
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+    
+    lines
 }
 
 fn format_size(bytes: u64) -> String {

@@ -967,6 +967,7 @@ dependencies = [
  "rupnp",
  "serde",
  "serde-xml-rs",
+ "serde_json",
  "tokio",
  "url",
 ]

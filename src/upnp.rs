@@ -41,9 +41,6 @@ pub fn start_discovery() -> Receiver<DiscoveryMessage> {
 async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
     let mut devices = Vec::new();
     
-    // Send helpful startup info
-    sender.send(DiscoveryMessage::Error("Starting UPnP discovery with rupnp library...".to_string())).ok();
-    
     // Search for all UPnP root devices using the new API
     match rupnp::discover(&SearchTarget::RootDevice, Duration::from_secs(5), None).await {
         Ok(device_stream) => {
@@ -56,13 +53,44 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
                 if let Ok(device) = device_result {
                     device_count += 1;
                     
-                    let upnp_device = UpnpDevice {
-                        name: format!("{} [{}]", device.friendly_name(), device.device_type()),
-                        location: device.url().to_string(),
-                        base_url: extract_base_url(&device.url().to_string()),
-                        device_client: Some(device.device_type().to_string()),
-                        content_directory_url: find_content_directory_service(&device),
+                    let device_url = device.url().to_string();
+                    let device_type = device.device_type().to_string();
+                    let friendly_name = device.friendly_name().to_string();
+                    
+                    
+                    // Special handling for Plex servers
+                    let base_url = if friendly_name.to_lowercase().contains("plex") || 
+                                      device_type.contains("plex") {
+                        // For Plex, try to construct the correct URL with port 32400
+                        if let Ok(url) = url::Url::parse(&device_url) {
+                            if let Some(host) = url.host_str() {
+                                format!("http://{}:32400", host)
+                            } else {
+                                extract_base_url(&device_url)
+                            }
+                        } else {
+                            extract_base_url(&device_url)
+                        }
+                    } else {
+                        extract_base_url(&device_url)
                     };
+                    
+                    // Fetch device description to get real service URLs
+                    let content_directory_url = match fetch_device_description(&device_url).await {
+                        Ok(desc) => parse_content_directory_url(&desc, &device_url),
+                        Err(e) => {
+                            None
+                        }
+                    };
+                    
+                    let upnp_device = UpnpDevice {
+                        name: format!("{} [{}]", friendly_name, device_type),
+                        location: device_url,
+                        base_url,
+                        device_client: Some(device_type),
+                        content_directory_url,
+                    };
+                    
                     
                     sender.send(DiscoveryMessage::DeviceFound(upnp_device.clone())).ok();
                     devices.push(upnp_device);
@@ -163,27 +191,93 @@ async fn scan_single_endpoint(ip: &str, port: u16) -> Option<UpnpDevice> {
     None
 }
 
-fn find_content_directory_service(device: &rupnp::Device) -> Option<String> {
-    // Look for ContentDirectory service
-    for service in device.services() {
-        if service.service_type().to_string().contains("ContentDirectory") {
-            // In rupnp 3.0, we need to construct the control URL manually
-            let device_url = device.url();
-            if let Ok(url) = url::Url::parse(&device_url.to_string()) {
-                if let Some(host) = url.host_str() {
-                    let port = url.port().unwrap_or(if url.scheme() == "https" { 443 } else { 80 });
-                    return Some(format!("{}://{}:{}/ContentDirectory/control", url.scheme(), host, port));
-                }
-            }
-        }
+async fn fetch_device_description(device_url: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(device_url)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Failed to fetch device description: {}", response.status()).into());
     }
     
-    // Fallback: construct URL based on device location
-    if let Ok(url) = url::Url::parse(&device.url().to_string()) {
-        if let Some(host) = url.host_str() {
-            let port = url.port().unwrap_or(32400);
-            return Some(format!("http://{}:{}/ContentDirectory/control", host, port));
+    Ok(response.text().await?)
+}
+
+fn parse_content_directory_url(device_desc: &str, device_url: &str) -> Option<String> {
+    use quick_xml::Reader;
+    use quick_xml::events::Event;
+    
+    let mut reader = Reader::from_str(device_desc);
+    reader.config_mut().trim_text(true);
+    
+    let mut buf = Vec::new();
+    let mut in_service = false;
+    let mut in_service_type = false;
+    let mut in_control_url = false;
+    let mut current_service_type = String::new();
+    let mut current_control_url = String::new();
+    
+    // Parse the device URL to get base URL for relative paths
+    let base_url = if let Ok(url) = url::Url::parse(device_url) {
+        format!("{}://{}:{}", url.scheme(), url.host_str().unwrap_or(""), url.port().unwrap_or(80))
+    } else {
+        return None;
+    };
+    
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                match e.name().as_ref() {
+                    b"service" => {
+                        in_service = true;
+                        current_service_type.clear();
+                        current_control_url.clear();
+                    }
+                    b"serviceType" => in_service_type = true,
+                    b"controlURL" => in_control_url = true,
+                    _ => {}
+                }
+            }
+            Ok(Event::Text(e)) => {
+                if in_service {
+                    let text = e.unescape().unwrap_or_default().to_string();
+                    if in_service_type {
+                        current_service_type = text;
+                    } else if in_control_url {
+                        current_control_url = text;
+                    }
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                match e.name().as_ref() {
+                    b"service" => {
+                        if current_service_type.contains("ContentDirectory") && !current_control_url.is_empty() {
+                            // Resolve relative URL
+                            let full_url = if current_control_url.starts_with("http") {
+                                current_control_url
+                            } else {
+                                format!("{}{}", base_url, current_control_url)
+                            };
+                            return Some(full_url);
+                        }
+                        in_service = false;
+                    }
+                    b"serviceType" => in_service_type = false,
+                    b"controlURL" => in_control_url = false,
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => {
+                eprintln!("Error parsing device description: {}", e);
+                break;
+            }
+            _ => {}
         }
+        buf.clear();
     }
     
     None
@@ -258,18 +352,55 @@ pub fn discover_plex_servers() -> (Vec<PlexServer>, Vec<String>) {
 }
 
 // Directory browsing implementation
-pub fn browse_directory(server: &PlexServer, path: &[String]) -> (Vec<DirectoryItem>, Option<String>) {
+pub fn browse_directory(server: &PlexServer, path: &[String], container_id_map: &mut std::collections::HashMap<Vec<String>, String>) -> (Vec<DirectoryItem>, Option<String>) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async_browse_directory(server, path))
+    rt.block_on(async_browse_directory(server, path, container_id_map))
 }
 
-async fn async_browse_directory(server: &PlexServer, path: &[String]) -> (Vec<DirectoryItem>, Option<String>) {
+async fn async_browse_directory(server: &PlexServer, path: &[String], container_id_map: &mut std::collections::HashMap<Vec<String>, String>) -> (Vec<DirectoryItem>, Option<String>) {
     let mut items = Vec::new();
+    let mut errors = Vec::new();
     
-    // For UPnP devices, try to browse via ContentDirectory service
+    
+    // Determine container ID based on path using proper nested traversal
+    let container_id = if path.is_empty() {
+        "0".to_string() // Root container
+    } else {
+        // Look up the container ID for the current path
+        if let Some(id) = container_id_map.get(path) {
+            id.clone()
+        } else {
+            // If not found, try to find it by traversing the path step by step
+            let mut current_path = Vec::new();
+            let mut current_id = "0".to_string();
+            
+            for segment in path {
+                current_path.push(segment.clone());
+                if let Some(id) = container_id_map.get(&current_path) {
+                    current_id = id.clone();
+                } else {
+                    // If we can't find the path, we need to browse to discover it
+                    // For now, fall back to root and let the discovery happen
+                    current_id = "0".to_string();
+                    break;
+                }
+            }
+            current_id
+        }
+    };
+    
+    // Always use UPnP ContentDirectory service
     if let Some(content_dir_url) = &server.content_directory_url {
-        match browse_upnp_content_directory(content_dir_url, path).await {
-            Ok(upnp_items) => {
+        match browse_upnp_content_directory_with_id(content_dir_url, &container_id).await {
+            Ok((upnp_items, container_mappings)) => {
+                // Update container ID mapping for navigation
+                for (title, container_id) in &container_mappings {
+                    // Store the mapping for this path + title combination
+                    let mut new_path = path.to_vec();
+                    new_path.push(title.clone());
+                    container_id_map.insert(new_path, container_id.clone());
+                }
+                
                 for item in upnp_items {
                     items.push(DirectoryItem {
                         name: item.title,
@@ -288,21 +419,41 @@ async fn async_browse_directory(server: &PlexServer, path: &[String]) -> (Vec<Di
                 }
                 return (items, None);
             }
-            Err(e) => {
-                return (items, Some(format!("UPnP browsing failed: {}", e)));
-            }
+                                Err(e) => {
+                        let error_msg = format!("UPnP ContentDirectory failed: {}", e);
+                        errors.push(error_msg);
+                    }
         }
+    } else {
+        let error_msg = "No UPnP ContentDirectory service available".to_string();
+        errors.push(error_msg);
     }
-    
-    // Fallback: try direct HTTP browsing for media servers
+
+    // Try HTTP fallback only if UPnP fails
     match browse_http_directory(&server.base_url, path).await {
         Ok(http_items) => {
             items.extend(http_items);
-            (items, None)
+            (items, if errors.is_empty() { None } else { Some(errors.join("; ")) })
         }
         Err(e) => {
-            (items, Some(format!("HTTP browsing failed: {}", e)))
+            let error_msg = format!("HTTP browsing failed: {}", e);
+            errors.push(error_msg);
+            (items, Some(errors.join("; ")))
         }
+    }
+}
+
+
+fn format_duration(milliseconds: u64) -> String {
+    let seconds = milliseconds / 1000;
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let secs = seconds % 60;
+    
+    if hours > 0 {
+        format!("{}:{:02}:{:02}", hours, minutes, secs)
+    } else {
+        format!("{}:{:02}", minutes, secs)
     }
 }
 
@@ -317,40 +468,113 @@ struct UpnpItem {
     format: Option<String>,
 }
 
-async fn browse_upnp_content_directory(content_dir_url: &str, path: &[String]) -> Result<Vec<UpnpItem>, Box<dyn std::error::Error>> {
-    let container_id = path_to_container_id(path);
+async fn browse_upnp_content_directory_with_id(content_dir_url: &str, container_id: &str) -> Result<(Vec<UpnpItem>, Vec<(String, String)>), Box<dyn std::error::Error>> {
     
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()?;
     
     // SOAP request for UPnP ContentDirectory Browse action
     let soap_action = "urn:schemas-upnp-org:service:ContentDirectory:1#Browse";
     let soap_body = format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
-        <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-            <s:Body>
-                <u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
-                    <ObjectID>{}</ObjectID>
-                    <BrowseFlag>BrowseDirectChildren</BrowseFlag>
-                    <Filter>*</Filter>
-                    <StartingIndex>0</StartingIndex>
-                    <RequestedCount>100</RequestedCount>
-                    <SortCriteria></SortCriteria>
-                </u:Browse>
-            </s:Body>
-        </s:Envelope>"#,
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+    <s:Body>
+        <u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+            <ObjectID>{}</ObjectID>
+            <BrowseFlag>BrowseDirectChildren</BrowseFlag>
+            <Filter>*</Filter>
+            <StartingIndex>0</StartingIndex>
+            <RequestedCount>100</RequestedCount>
+            <SortCriteria></SortCriteria>
+        </u:Browse>
+    </s:Body>
+</s:Envelope>"#,
         container_id
     );
+    
     
     let response = client
         .post(content_dir_url)
         .header("Content-Type", "text/xml; charset=utf-8")
         .header("SOAPAction", format!("\"{}\"", soap_action))
+        .header("User-Agent", "MOP/1.0")
         .body(soap_body)
         .send()
         .await?;
     
+    let status = response.status();
+    
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("UPnP SOAP request failed with status: {}", status).into());
+    }
+    
     let response_text = response.text().await?;
+    
+    // Check for SOAP faults
+    if response_text.contains("soap:Fault") || response_text.contains("SOAP-ENV:Fault") {
+        return Err(format!("UPnP SOAP fault in response: {}", response_text).into());
+    }
+    
     parse_didl_response(&response_text)
+}
+
+async fn browse_upnp_content_directory(content_dir_url: &str, path: &[String]) -> Result<Vec<UpnpItem>, Box<dyn std::error::Error>> {
+    // For now, always use root container ID
+    // This is a temporary fix - proper implementation would track container IDs
+    let container_id = "0";
+    
+    
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()?;
+    
+    // SOAP request for UPnP ContentDirectory Browse action
+    let soap_action = "urn:schemas-upnp-org:service:ContentDirectory:1#Browse";
+    let soap_body = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+    <s:Body>
+        <u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+            <ObjectID>{}</ObjectID>
+            <BrowseFlag>BrowseDirectChildren</BrowseFlag>
+            <Filter>*</Filter>
+            <StartingIndex>0</StartingIndex>
+            <RequestedCount>100</RequestedCount>
+            <SortCriteria></SortCriteria>
+        </u:Browse>
+    </s:Body>
+</s:Envelope>"#,
+        container_id
+    );
+    
+    
+    let response = client
+        .post(content_dir_url)
+        .header("Content-Type", "text/xml; charset=utf-8")
+        .header("SOAPAction", format!("\"{}\"", soap_action))
+        .header("User-Agent", "MOP/1.0")
+        .body(soap_body)
+        .send()
+        .await?;
+    
+    let status = response.status();
+    
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        return Err(format!("UPnP SOAP request failed with status: {}", status).into());
+    }
+    
+    let response_text = response.text().await?;
+    
+    // Check for SOAP faults
+    if response_text.contains("soap:Fault") || response_text.contains("SOAP-ENV:Fault") {
+        return Err(format!("UPnP SOAP fault in response: {}", response_text).into());
+    }
+    
+    let (items, _) = parse_didl_response(&response_text)?;
+    Ok(items)
 }
 
 async fn browse_http_directory(base_url: &str, path: &[String]) -> Result<Vec<DirectoryItem>, Box<dyn std::error::Error>> {
@@ -460,18 +684,62 @@ fn parse_html_directory(html_text: &str, base_url: &str) -> Result<Vec<Directory
     Ok(items)
 }
 
-fn parse_didl_response(xml: &str) -> Result<Vec<UpnpItem>, Box<dyn std::error::Error>> {
+fn extract_didl_from_soap(soap_xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     use quick_xml::Reader;
     use quick_xml::events::Event;
     
+    let mut reader = Reader::from_str(soap_xml);
+    reader.config_mut().trim_text(true);
+    
+    let mut buf = Vec::new();
+    let mut in_result = false;
+    
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                if e.name().as_ref() == b"Result" {
+                    in_result = true;
+                }
+            }
+            Ok(Event::Text(e)) => {
+                if in_result {
+                    // Unescape the XML entities
+                    let escaped = e.unescape().unwrap_or_default();
+                    return Ok(escaped.to_string());
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                if e.name().as_ref() == b"Result" {
+                    in_result = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => return Err(Box::new(e)),
+            _ => {}
+        }
+        buf.clear();
+    }
+    
+    Err("No Result element found in SOAP response".into())
+}
+
+fn parse_didl_response(xml: &str) -> Result<(Vec<UpnpItem>, Vec<(String, String)>), Box<dyn std::error::Error>> {
+    use quick_xml::Reader;
+    use quick_xml::events::Event;
+    
+    // First, extract the DIDL-Lite XML from the SOAP response
+    let didl_xml = extract_didl_from_soap(xml)?;
+    
     let mut items = Vec::new();
-    let mut reader = Reader::from_str(xml);
+    let mut container_mappings = Vec::new(); // (title, container_id)
+    let mut reader = Reader::from_str(&didl_xml);
     reader.config_mut().trim_text(true);
     
     let mut buf = Vec::new();
     let mut current_item: Option<UpnpItem> = None;
     let mut in_title = false;
     let mut in_resource = false;
+    let mut current_title = String::new();
     
     loop {
         match reader.read_event_into(&mut buf) {
@@ -480,7 +748,7 @@ fn parse_didl_response(xml: &str) -> Result<Vec<UpnpItem>, Box<dyn std::error::E
                     b"container" => {
                         let id = get_attribute_value(e, b"id").unwrap_or_default();
                         current_item = Some(UpnpItem {
-                            id,
+                            id: id.clone(),
                             title: String::new(),
                             is_container: true,
                             resource_url: None,
@@ -488,6 +756,7 @@ fn parse_didl_response(xml: &str) -> Result<Vec<UpnpItem>, Box<dyn std::error::E
                             duration: None,
                             format: None,
                         });
+                        current_title.clear();
                     }
                     b"item" => {
                         let id = get_attribute_value(e, b"id").unwrap_or_default();
@@ -517,8 +786,9 @@ fn parse_didl_response(xml: &str) -> Result<Vec<UpnpItem>, Box<dyn std::error::E
             }
             Ok(Event::Text(e)) => {
                 if in_title {
+                    current_title = e.unescape().unwrap_or_default().to_string();
                     if let Some(ref mut item) = current_item {
-                        item.title = e.unescape().unwrap_or_default().to_string();
+                        item.title = current_title.clone();
                     }
                 } else if in_resource {
                     if let Some(ref mut item) = current_item {
@@ -528,7 +798,16 @@ fn parse_didl_response(xml: &str) -> Result<Vec<UpnpItem>, Box<dyn std::error::E
             }
             Ok(Event::End(ref e)) => {
                 match e.name().as_ref() {
-                    b"container" | b"item" => {
+                    b"container" => {
+                        if let Some(item) = current_item.take() {
+                            if !current_title.is_empty() {
+                                // Store container mapping for navigation
+                                container_mappings.push((current_title.clone(), item.id.clone()));
+                            }
+                            items.push(item);
+                        }
+                    }
+                    b"item" => {
                         if let Some(item) = current_item.take() {
                             items.push(item);
                         }
@@ -545,7 +824,7 @@ fn parse_didl_response(xml: &str) -> Result<Vec<UpnpItem>, Box<dyn std::error::E
         buf.clear();
     }
     
-    Ok(items)
+    Ok((items, container_mappings))
 }
 
 fn get_attribute_value(element: &quick_xml::events::BytesStart, attr_name: &[u8]) -> Option<String> {
@@ -559,13 +838,4 @@ fn get_attribute_value(element: &quick_xml::events::BytesStart, attr_name: &[u8]
             }
             None
         })
-}
-
-fn path_to_container_id(path: &[String]) -> String {
-    if path.is_empty() {
-        "0".to_string() // Root container in UPnP
-    } else {
-        // Simple path to ID mapping - in real implementation you'd need to track container IDs
-        format!("path_{}", path.join("_"))
-    }
 }

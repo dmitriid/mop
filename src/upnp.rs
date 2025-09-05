@@ -1,5 +1,7 @@
 use crate::app::DirectoryItem;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::Duration;
+use rupnp::ssdp::SearchTarget;
 
 #[derive(Debug, Clone)]
 pub struct UpnpDevice {
@@ -10,7 +12,6 @@ pub struct UpnpDevice {
     pub content_directory_url: Option<String>,
 }
 
-// Keep PlexServer as an alias for backward compatibility
 pub type PlexServer = UpnpDevice;
 
 #[derive(Debug)]
@@ -20,44 +21,241 @@ pub enum DiscoveryMessage {
     Phase1Complete, // SSDP discovery complete
     Phase2Complete, // Extended discovery complete
     Phase3Complete, // Port scan complete
-    AllComplete(Vec<UpnpDevice>),    // Final result
+    AllComplete(Vec<UpnpDevice>),
     Error(String),
 }
 
 pub fn start_discovery() -> Receiver<DiscoveryMessage> {
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = mpsc::channel();
     
     std::thread::spawn(move || {
-        let discovery_rx = crate::discovery_manager::DiscoveryManager::start_discovery();
+        tx.send(DiscoveryMessage::Started).ok();
         
-        // Convert discovery manager messages to upnp messages
-        while let Ok(msg) = discovery_rx.recv() {
-            let upnp_msg = match msg {
-                crate::discovery_manager::DiscoveryMessage::Started => DiscoveryMessage::Started,
-                crate::discovery_manager::DiscoveryMessage::DeviceFound(device) => DiscoveryMessage::DeviceFound(device),
-                crate::discovery_manager::DiscoveryMessage::AllComplete(devices) => DiscoveryMessage::AllComplete(devices),
-                crate::discovery_manager::DiscoveryMessage::Error(e) => DiscoveryMessage::Error(e),
-                crate::discovery_manager::DiscoveryMessage::PermissionDenied(e) => DiscoveryMessage::Error(e),
-                crate::discovery_manager::DiscoveryMessage::SsdpComplete(_) => DiscoveryMessage::Phase1Complete,
-                crate::discovery_manager::DiscoveryMessage::PortScanComplete(_) => DiscoveryMessage::Phase2Complete,
-                _ => continue, // Skip other message types
-            };
-            
-            if tx.send(upnp_msg).is_err() {
-                break; // Receiver disconnected
-            }
-        }
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+        rt.block_on(discover_with_rupnp(tx));
     });
     
     rx
 }
 
-// Public API functions - simplified blocking version
-pub fn discover_plex_servers() -> (Vec<PlexServer>, Vec<String>) {
-    // Use the new discovery manager
-    crate::discovery_manager::discover_upnp_devices()
+async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
+    let mut devices = Vec::new();
+    
+    // Send helpful startup info
+    sender.send(DiscoveryMessage::Error("Starting UPnP discovery with rupnp library...".to_string())).ok();
+    
+    // Search for all UPnP root devices using the new API
+    match rupnp::discover(&SearchTarget::RootDevice, Duration::from_secs(5), None).await {
+        Ok(device_stream) => {
+            use futures_util::StreamExt;
+            
+            let mut stream = Box::pin(device_stream);
+            let mut device_count = 0;
+            
+            while let Some(device_result) = stream.next().await {
+                if let Ok(device) = device_result {
+                    device_count += 1;
+                    
+                    let upnp_device = UpnpDevice {
+                        name: format!("{} [{}]", device.friendly_name(), device.device_type()),
+                        location: device.url().to_string(),
+                        base_url: extract_base_url(&device.url().to_string()),
+                        device_client: Some(device.device_type().to_string()),
+                        content_directory_url: find_content_directory_service(&device),
+                    };
+                    
+                    sender.send(DiscoveryMessage::DeviceFound(upnp_device.clone())).ok();
+                    devices.push(upnp_device);
+                    
+                    if device_count >= 20 {
+                        break; // Limit to prevent hanging
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            sender.send(DiscoveryMessage::Error(format!("UPnP discovery failed: {}", e))).ok();
+        }
+    }
+    
+    sender.send(DiscoveryMessage::Phase1Complete).ok();
+    
+    // Note: rupnp 3.0 discovery already finds all devices including media servers
+    
+    sender.send(DiscoveryMessage::Phase2Complete).ok();
+    
+    // Try port scanning as fallback
+    match targeted_port_scan().await {
+        Ok(scan_devices) => {
+            for device in scan_devices {
+                if !devices.iter().any(|d| d.location == device.location) {
+                    sender.send(DiscoveryMessage::DeviceFound(device.clone())).ok();
+                    devices.push(device);
+                }
+            }
+        }
+        Err(e) => {
+            sender.send(DiscoveryMessage::Error(format!("Port scan failed: {}", e))).ok();
+        }
+    }
+    
+    sender.send(DiscoveryMessage::Phase3Complete).ok();
+    sender.send(DiscoveryMessage::AllComplete(devices)).ok();
 }
 
+async fn targeted_port_scan() -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error>> {
+    let mut devices = Vec::new();
+    
+    // Get local network range
+    let network_base = match get_local_network() {
+        Some(base) => base,
+        None => return Ok(devices), // Return empty instead of error
+    };
+    
+    // Scan promising IPs and ports
+    let promising_ips = vec![1, 2, 10, 100, 200];
+    let media_ports = vec![32400, 8096, 8920]; // Plex, Jellyfin, Emby
+    
+    for ip_suffix in promising_ips {
+        let ip = format!("{}.{}", network_base, ip_suffix);
+        for &port in &media_ports {
+            if let Some(device) = scan_single_endpoint(&ip, port).await {
+                devices.push(device);
+            }
+        }
+    }
+    
+    Ok(devices)
+}
+
+async fn scan_single_endpoint(ip: &str, port: u16) -> Option<UpnpDevice> {
+    let url = format!("http://{}:{}", ip, port);
+    
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(300))
+        .build()
+        .ok()?;
+    
+    let endpoints = vec!["/", "/status", "/identity"];
+    
+    for endpoint in endpoints {
+        let test_url = format!("{}{}", url, endpoint);
+        if let Ok(response) = client.get(&test_url).send().await {
+            if response.status().is_success() {
+                let server_name = match port {
+                    32400 => format!("Plex Server ({}:{})", ip, port),
+                    8096 => format!("Jellyfin Server ({}:{})", ip, port),
+                    8920 => format!("Emby Server ({}:{})", ip, port),
+                    _ => format!("Media Server ({}:{})", ip, port),
+                };
+                
+                return Some(UpnpDevice {
+                    name: server_name,
+                    location: url.clone(),
+                    base_url: url,
+                    device_client: Some("DirectScan".to_string()),
+                    content_directory_url: None,
+                });
+            }
+        }
+    }
+    
+    None
+}
+
+fn find_content_directory_service(device: &rupnp::Device) -> Option<String> {
+    // Look for ContentDirectory service
+    for service in device.services() {
+        if service.service_type().to_string().contains("ContentDirectory") {
+            // In rupnp 3.0, we need to construct the control URL manually
+            let device_url = device.url();
+            if let Ok(url) = url::Url::parse(&device_url.to_string()) {
+                if let Some(host) = url.host_str() {
+                    let port = url.port().unwrap_or(if url.scheme() == "https" { 443 } else { 80 });
+                    return Some(format!("{}://{}:{}/ContentDirectory/control", url.scheme(), host, port));
+                }
+            }
+        }
+    }
+    
+    // Fallback: construct URL based on device location
+    if let Ok(url) = url::Url::parse(&device.url().to_string()) {
+        if let Some(host) = url.host_str() {
+            let port = url.port().unwrap_or(32400);
+            return Some(format!("http://{}:{}/ContentDirectory/control", host, port));
+        }
+    }
+    
+    None
+}
+
+fn extract_base_url(device_url: &str) -> String {
+    if let Ok(url) = url::Url::parse(device_url) {
+        if let Some(host) = url.host_str() {
+            let port = url.port().unwrap_or(if url.scheme() == "https" { 443 } else { 80 });
+            format!("{}://{}:{}", url.scheme(), host, port)
+        } else {
+            device_url.to_string()
+        }
+    } else {
+        device_url.to_string()
+    }
+}
+
+fn get_local_network() -> Option<String> {
+    use std::net::{TcpStream, SocketAddr};
+    
+    if let Ok(stream) = TcpStream::connect("8.8.8.8:80") {
+        if let Ok(local_addr) = stream.local_addr() {
+            if let SocketAddr::V4(addr) = local_addr {
+                let ip = addr.ip().to_string();
+                let parts: Vec<&str> = ip.split('.').collect();
+                if parts.len() >= 3 {
+                    return Some(format!("{}.{}.{}", parts[0], parts[1], parts[2]));
+                }
+            }
+        }
+    }
+    None
+}
+
+// Public API functions - simplified blocking version
+pub fn discover_plex_servers() -> (Vec<PlexServer>, Vec<String>) {
+    let receiver = start_discovery();
+    
+    let mut devices = Vec::new();
+    let mut errors = Vec::new();
+    
+    let timeout_duration = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    
+    while start.elapsed() < timeout_duration {
+        match receiver.try_recv() {
+            Ok(message) => match message {
+                DiscoveryMessage::DeviceFound(device) => {
+                    devices.push(device);
+                }
+                DiscoveryMessage::AllComplete(final_devices) => {
+                    return (final_devices, errors);
+                }
+                DiscoveryMessage::Error(e) => {
+                    errors.push(e);
+                }
+                _ => {} // Ignore intermediate phase completions
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+        }
+    }
+    
+    if devices.is_empty() && errors.is_empty() {
+        errors.push("Discovery timed out".to_string());
+    }
+    
+    (devices, errors)
+}
 
 // Directory browsing implementation
 pub fn browse_directory(server: &PlexServer, path: &[String]) -> (Vec<DirectoryItem>, Option<String>) {
@@ -362,7 +560,6 @@ fn get_attribute_value(element: &quick_xml::events::BytesStart, attr_name: &[u8]
             None
         })
 }
-
 
 fn path_to_container_id(path: &[String]) -> String {
     if path.is_empty() {

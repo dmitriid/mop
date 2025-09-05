@@ -14,55 +14,10 @@ use ratatui::{
 mod app;
 mod ui;
 mod upnp;
-mod upnp_ssdp;
-mod macos_permissions;
-mod network_interfaces;
-mod discovery_manager;
-mod debug_ssdp;
 
 use app::App;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Check for debug mode
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 && args[1] == "debug" {
-        debug_ssdp::debug_ssdp_discovery();
-        debug_ssdp::test_multicast_methods();
-        return Ok(());
-    }
-    
-    // Check and handle macOS permissions before starting TUI
-    #[cfg(target_os = "macos")]
-    {
-        use macos_permissions::{check_local_network_permission, request_permission_interactive, PermissionState};
-        
-        let permission_state = check_local_network_permission();
-        match permission_state {
-            PermissionState::Denied => {
-                println!("⚠️  Local network permission is required for UPnP discovery.");
-                match request_permission_interactive() {
-                    Ok(PermissionState::Granted) => {
-                        println!("✅ Permission granted! Starting application...\n");
-                    }
-                    Ok(_) | Err(_) => {
-                        println!("⚠️  Continuing without permission. UPnP discovery may not work.");
-                        println!("💡 You can grant permission later in System Preferences.\n");
-                        println!("💡 Run 'cargo run debug' to test SSDP discovery in detail.\n");
-                    }
-                }
-            }
-            PermissionState::Unknown => {
-                println!("🔍 Checking network permissions...");
-            }
-            PermissionState::Granted => {
-                // All good, proceed normally
-            }
-            PermissionState::NeedsRequest => {
-                // Will be handled during discovery
-            }
-        }
-    }
-    
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();

@@ -11,7 +11,8 @@
       "Bash(rustc:*)",
       "Bash(./test_network)",
       "Bash(cat:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(./build_dev.sh:*)"
     ],
     "deny": [],
     "ask": []

@@ -9,6 +9,17 @@ MOP is a TUI (Terminal User Interface) application written in Rust for discoveri
 - Browse directory structures on discovered Plex servers
 - Retrieve information about exposed media files
 - Extract direct URLs to media files for access
+- run an external command on Enter when pressed on a file
+
+App also uses a TOML config in ~/.config/mop.toml that lists which app to run on Enter, and whether to auto close when that command is run.
+
+## Rust
+
+Never add dependencies directly to Cargo.toml. Always use `cargo add`.
+
+## Go
+
+Never do things manually iof there's a go tool existing. E.g. never add dependencies manually
 
 ## Thorough analysis
 

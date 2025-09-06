@@ -29,6 +29,7 @@ const KEYS: KeyMappings = KeyMappings {
 };
 
 const ERROR_KEY: &str = "e: dump errors";
+const CONFIG_KEY: &str = "c: config";
 
 
 pub fn draw(f: &mut Frame, app: &mut App) {
@@ -39,24 +40,26 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let help_text = match app.state {
         AppState::ServerList => {
             if has_errors {
-                format!("─────| {} |─────| {} |─────| {} |─────| {} |─────| {} |─────", 
-                    KEYS.navigate, KEYS.select_server, ERROR_KEY, KEYS.help, KEYS.quit)
+                format!("{} | {} | {} | {} | {} | {}", 
+                    KEYS.navigate, KEYS.select_server, ERROR_KEY, CONFIG_KEY, KEYS.help, KEYS.quit)
             } else {
-                format!("─────| {} |─────| {} |─────| {} |─────| {} |─────", 
-                    KEYS.navigate, KEYS.select_server, KEYS.help, KEYS.quit)
+                format!("{} | {} | {} | {} | {}", 
+                    KEYS.navigate, KEYS.select_server, CONFIG_KEY, KEYS.help, KEYS.quit)
             }
         },
-        AppState::DirectoryBrowser => format!("─────| {} |─────| {} |─────| {} |─────| {} |─────| {} |─────", 
-            KEYS.navigate, KEYS.open, KEYS.back, KEYS.help, KEYS.quit),
-        AppState::FileDetails => format!("─────| {} |─────| {} |─────| {} |─────", 
-            KEYS.back_to_directory, KEYS.help, KEYS.quit),
+        AppState::DirectoryBrowser => format!("{} | {} | {} | {} | {} | {}", 
+            KEYS.navigate, KEYS.open, KEYS.back, CONFIG_KEY, KEYS.help, KEYS.quit),
+        AppState::FileDetails => format!("{} | {} | {} | {}", 
+            KEYS.back_to_directory, CONFIG_KEY, KEYS.help, KEYS.quit),
+
     };
     
-    let [title_area, content_area] = Layout::default()
+    let [title_area, content_area, help_area] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),  // Title
             Constraint::Min(1),     // Main content
+            Constraint::Length(1),  // Help text
         ])
         .split(f.area())[..] else { return };
 
@@ -76,15 +79,25 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             ])
             .split(content_area)[..] else { return };
             
-        draw_main_content(f, app, main_area, &help_text);
+        draw_main_content(f, app, main_area);
         draw_error_panel(f, app, error_area);
     } else {
-        draw_main_content(f, app, content_area, &help_text);
+        draw_main_content(f, app, content_area);
     }
+    
+    // Draw help text at the bottom
+    let help_paragraph = Paragraph::new(help_text)
+        .style(Style::default().fg(Color::Gray));
+    f.render_widget(help_paragraph, help_area);
 
     // Draw help modal if shown
     if app.show_help {
         draw_help_modal(f);
+    }
+    
+    // Draw config modal if shown
+    if app.show_config {
+        draw_config_modal(f, app);
     }
 }
 
@@ -160,6 +173,71 @@ fn draw_file_info_panel(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(info, area);
 }
 
+fn draw_server_info_panel(f: &mut Frame, app: &App, area: Rect) {
+    let mut info_lines = Vec::new();
+    
+    if let Some(server_idx) = app.selected_server {
+        if server_idx < app.servers.len() {
+            let server = &app.servers[server_idx];
+            
+            info_lines.push(Line::from(vec![
+                Span::styled("Name: ", Style::default().fg(Color::Cyan)),
+                Span::raw(&server.name),
+            ]));
+            
+            info_lines.push(Line::from(""));
+            
+            info_lines.push(Line::from(vec![
+                Span::styled("Location: ", Style::default().fg(Color::Green)),
+            ]));
+            // Split long URLs into multiple lines
+            let url_lines = wrap_text(&server.location, area.width.saturating_sub(4) as usize);
+            for line in url_lines {
+                info_lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::raw(line),
+                ]));
+            }
+            
+            info_lines.push(Line::from(""));
+            
+            info_lines.push(Line::from(vec![
+                Span::styled("Base URL: ", Style::default().fg(Color::Green)),
+            ]));
+            let base_url_lines = wrap_text(&server.base_url, area.width.saturating_sub(4) as usize);
+            for line in base_url_lines {
+                info_lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::raw(line),
+                ]));
+            }
+            
+            if let Some(content_url) = &server.content_directory_url {
+                info_lines.push(Line::from(""));
+                info_lines.push(Line::from(vec![
+                    Span::styled("Content Directory: ", Style::default().fg(Color::Yellow)),
+                ]));
+                let content_lines = wrap_text(content_url, area.width.saturating_sub(4) as usize);
+                for line in content_lines {
+                    info_lines.push(Line::from(vec![
+                        Span::raw("  "),
+                        Span::raw(line),
+                    ]));
+                }
+            }
+        }
+    } else {
+        info_lines.push(Line::from(vec![
+            Span::styled("No server selected", Style::default().fg(Color::Gray)),
+        ]));
+    }
+    
+    let info = Paragraph::new(info_lines)
+        .block(Block::default().borders(Borders::ALL).title("Server Info"))
+        .wrap(ratatui::widgets::Wrap { trim: true });
+    f.render_widget(info, area);
+}
+
 fn draw_error_panel(f: &mut Frame, app: &App, area: Rect) {
     let mut error_lines = Vec::new();
     
@@ -185,9 +263,18 @@ fn draw_error_panel(f: &mut Frame, app: &App, area: Rect) {
 }
 
 
-fn draw_main_content(f: &mut Frame, app: &App, area: Rect, help_text: &str) {
+fn draw_main_content(f: &mut Frame, app: &App, area: Rect) {
     match app.state {
         AppState::ServerList => {
+            // Split area into server list and server info panel
+            let [list_area, info_area] = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(60),  // Server list
+                    Constraint::Percentage(40),  // Server info panel
+                ])
+                .split(area)[..] else { return };
+
             let items: Vec<ListItem> = app
                 .servers
                 .iter()
@@ -199,10 +286,15 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect, help_text: &str) {
                         Style::default()
                     };
                     
+                    // Extract clean device name (remove bracketed info)
+                    let clean_name = if let Some(bracket_pos) = server.name.find(" [") {
+                        &server.name[..bracket_pos]
+                    } else {
+                        &server.name
+                    };
+                    
                     ListItem::new(Line::from(vec![
-                        Span::styled(&server.name, style),
-                        Span::raw(" - "),
-                        Span::styled(&server.location, Style::default().fg(Color::Gray)),
+                        Span::styled(clean_name, style),
                     ]))
                 })
                 .collect();
@@ -216,14 +308,16 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect, help_text: &str) {
             let list = List::new(items)
                 .block(Block::default()
                     .title(title)
-                    .title_bottom(help_text)
                     .borders(Borders::ALL))
                 .highlight_style(Style::default().bg(Color::DarkGray));
 
             let mut list_state = ListState::default();
             list_state.select(app.selected_server);
             
-            f.render_stateful_widget(list, area, &mut list_state);
+            f.render_stateful_widget(list, list_area, &mut list_state);
+            
+            // Draw server info panel
+            draw_server_info_panel(f, app, info_area);
         },
         AppState::DirectoryBrowser => {
             let current_path = if app.current_directory.is_empty() {
@@ -265,7 +359,6 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect, help_text: &str) {
             let list = List::new(items)
                 .block(Block::default()
                     .title(format!("Directory: {}", current_path))
-                    .title_bottom(help_text)
                     .borders(Borders::ALL))
                 .highlight_style(Style::default().bg(Color::DarkGray));
 
@@ -322,22 +415,22 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect, help_text: &str) {
                     let paragraph = Paragraph::new(details)
                         .block(Block::default()
                             .title("File Details")
-                            .title_bottom(help_text)
                             .borders(Borders::ALL));
                     
                     f.render_widget(paragraph, area);
                 }
             }
         }
+
     }
 }
 
 fn draw_help_modal(f: &mut Frame) {
     let area = f.area();
     
-    // Calculate centered modal size
-    let modal_width = 60;
-    let modal_height = 14;
+    // Calculate centered modal size - make it bigger for more keys
+    let modal_width = 65;
+    let modal_height = 18;
     let x = (area.width.saturating_sub(modal_width)) / 2;
     let y = (area.height.saturating_sub(modal_height)) / 2;
     
@@ -362,12 +455,18 @@ fn draw_help_modal(f: &mut Frame) {
         Line::from("files to play them with mpv."),
         Line::from(""),
         Line::from(vec![
-            Span::styled("Keys:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled("Navigation:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(KEYS.navigate),
         Line::from(KEYS.select_server),
         Line::from(KEYS.open),
         Line::from(KEYS.back),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("Actions:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(CONFIG_KEY),
+        Line::from(ERROR_KEY),
         Line::from(KEYS.help),
         Line::from(KEYS.quit),
         Line::from(""),
@@ -376,7 +475,7 @@ fn draw_help_modal(f: &mut Frame) {
     let paragraph = Paragraph::new(help_text)
         .block(Block::default()
             .title("Help")
-            .title_bottom("Press ? to close")
+            .title_bottom("Press ? or Esc to close")
             .borders(Borders::ALL)
             .style(Style::default().bg(Color::Black)))
         .alignment(Alignment::Center);
@@ -422,4 +521,96 @@ fn format_size(bytes: u64) -> String {
     }
 
     format!("{:.2} {}", size, UNITS[unit_index])
+}
+
+fn draw_config_modal(f: &mut Frame, app: &App) {
+    let area = f.area();
+    
+    // Calculate centered modal size - simpler and smaller
+    let modal_width = 70;
+    let modal_height = 12;
+    let x = (area.width.saturating_sub(modal_width)) / 2;
+    let y = (area.height.saturating_sub(modal_height)) / 2;
+    
+    let modal_area = Rect {
+        x,
+        y,
+        width: modal_width,
+        height: modal_height,
+    };
+    
+    // Clear just the modal area for clean overlay
+    f.render_widget(Clear, modal_area);
+    let block = Block::default()
+        .title("Configuration")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .style(Style::default().bg(Color::Black));
+    
+    // Get inner area
+    let inner_area = block.inner(modal_area);
+    f.render_widget(block, modal_area);
+    
+    // Split into content and help
+    let [content_area, help_area] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(6),  // Content
+            Constraint::Min(1),     // Help
+        ])
+        .split(inner_area)[..] else { return };
+
+    // Simple vertical layout for fields
+    let [input_line, checkbox_line, spacing] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),  // Input with border
+            Constraint::Length(1),  // Checkbox line
+            Constraint::Length(2),  // Spacing
+        ])
+        .split(content_area)[..] else { return };
+    
+    // Media player command input
+    let run_border_style = if app.config_editor.selected_field == crate::app::ConfigField::Run {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+    
+    let run_input = Paragraph::new(app.config_editor.run_input.value())
+        .block(Block::default()
+            .title("Media Player Command")
+            .borders(Borders::ALL)
+            .border_style(run_border_style));
+    f.render_widget(run_input, input_line);
+    
+    // Simple checkbox line - DOS/MC style
+    let checkbox_symbol = if app.config_editor.auto_close { "[x]" } else { "[ ]" };
+    let checkbox_style = if app.config_editor.selected_field == crate::app::ConfigField::AutoClose {
+        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+    };
+    
+    let checkbox_text = format!("{} Auto close after launch", checkbox_symbol);
+    let checkbox_para = Paragraph::new(checkbox_text)
+        .style(checkbox_style);
+    f.render_widget(checkbox_para, checkbox_line);
+    
+    // Simple help text
+    let help_text = "Tab/Shift+Tab: Navigate | Space: Toggle | Enter: Save | Esc: Cancel";
+    let help_para = Paragraph::new(help_text)
+        .style(Style::default().fg(Color::Gray))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::TOP));
+    f.render_widget(help_para, help_area);
+    
+    // Position cursor
+    if app.config_editor.selected_field == crate::app::ConfigField::Run {
+        f.set_cursor_position((
+            input_line.x + app.config_editor.run_input.cursor() as u16 + 1,
+            input_line.y + 1,
+        ));
+    }
 }

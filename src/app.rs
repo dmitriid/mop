@@ -1,6 +1,9 @@
 use crate::upnp::{PlexServer, DiscoveryMessage};
+use crate::config::Config;
 use std::sync::mpsc::Receiver;
 use std::collections::HashMap;
+use tui_input::Input;
+
 
 #[derive(Debug, Clone)]
 pub enum AppState {
@@ -22,7 +25,23 @@ pub struct App {
     discovery_receiver: Option<Receiver<DiscoveryMessage>>,
     pub is_discovering: bool,
     pub show_help: bool,
+    pub show_config: bool,
+    pub should_quit: bool,
     pub container_id_map: HashMap<Vec<String>, String>,
+    pub config: Config,
+    pub config_editor: ConfigEditor,
+}
+
+pub struct ConfigEditor {
+    pub run_input: Input,
+    pub auto_close: bool,
+    pub selected_field: ConfigField,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ConfigField {
+    Run,
+    AutoClose,
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +61,9 @@ pub struct FileMetadata {
 
 impl App {
     pub fn new() -> Self {
+        let config = Config::load();
+        let config_editor = ConfigEditor::new(&config);
+        
         let mut app = Self {
             state: AppState::ServerList,
             servers: Vec::new(),
@@ -55,7 +77,11 @@ impl App {
             discovery_receiver: None,
             is_discovering: false,
             show_help: false,
+            show_config: false,
+            should_quit: false,
             container_id_map: HashMap::new(),
+            config,
+            config_editor,
         };
         
         // Initialize with root container ID
@@ -86,7 +112,7 @@ impl App {
                         self.discovery_errors.clear();
                     }
                     DiscoveryMessage::DeviceFound(device) => {
-                        // Add device immediately for responsive UI
+                        // Add device immediately for responsive UI with proper deduplication
                         if !self.servers.iter().any(|d| d.location == device.location) {
                             self.servers.push(device);
                         }
@@ -101,7 +127,12 @@ impl App {
                         // Port scan phase complete
                     }
                     DiscoveryMessage::AllComplete(final_devices) => {
-                        self.servers = final_devices;
+                        // Merge final devices with existing ones, avoiding duplicates
+                        for device in final_devices {
+                            if !self.servers.iter().any(|d| d.location == device.location) {
+                                self.servers.push(device);
+                            }
+                        }
                         self.is_discovering = false;
                         should_clear_receiver = true;
                         
@@ -221,6 +252,7 @@ impl App {
             AppState::FileDetails => {
                 self.state = AppState::DirectoryBrowser;
             }
+
         }
     }
 
@@ -268,13 +300,17 @@ impl App {
         None
     }
 
-    pub fn play_selected_file(&self) -> Result<(), String> {
+    pub fn play_selected_file(&mut self) -> Result<(), String> {
         if let Some(item_idx) = self.selected_item {
             if item_idx < self.directory_contents.len() {
                 let item = &self.directory_contents[item_idx];
                 if !item.is_directory {
                     if let Some(url) = &item.url {
-                        return self.invoke_mpv(url);
+                        let result = self.invoke_player(url);
+                        if result.is_ok() && self.config.mop.auto_close {
+                            self.should_quit = true;
+                        }
+                        return result;
                     } else {
                         return Err("No URL available for this file".to_string());
                     }
@@ -287,19 +323,27 @@ impl App {
     }
 
     fn invoke_mpv(&self, url: &str) -> Result<(), String> {
-        use std::process::{Command, Stdio};
+        self.invoke_player(url)
+    }
+
+    fn invoke_player(&self, url: &str) -> Result<(), String> {
+        use std::process::Command;
         
-        // Use nohup and & to completely detach mpv from MOP's process tree
+        let player = &self.config.mop.run;
+        
+        // Use setsid with nohup for complete session detachment
+        // This ensures the player runs completely independently of MOP
+        let cmd_str = format!("setsid nohup {} '{}' </dev/null >/dev/null 2>&1 &", player, url);
         let status = Command::new("sh")
             .arg("-c")
-            .arg(format!("nohup mpv --really-quiet --no-terminal '{}' > /dev/null 2>&1 &", url))
+            .arg(&cmd_str)
             .status()
-            .map_err(|e| format!("Failed to start mpv: {}", e))?;
+            .map_err(|e| format!("Failed to start {}: {}", player, e))?;
         
         if status.success() {
             Ok(())
         } else {
-            Err(format!("Failed to detach mpv process"))
+            Err(format!("Failed to start {} command", player))
         }
     }
     
@@ -316,5 +360,91 @@ impl App {
     
     fn set_container_id(&mut self, path: &[String], container_id: String) {
         self.container_id_map.insert(path.to_vec(), container_id);
+    }
+
+    pub fn open_config_editor(&mut self) {
+        self.show_config = true;
+        self.config_editor = ConfigEditor::new(&self.config);
+    }
+
+    pub fn save_config(&mut self) -> Result<(), String> {
+        // Update config from editor
+        self.config.mop.run = self.config_editor.run_input.value().to_string();
+        self.config.mop.auto_close = self.config_editor.auto_close;
+        
+        // Save to file
+        match self.config.save() {
+            Ok(_) => {
+                self.show_config = false;
+                self.last_error = None;
+                Ok(())
+            }
+            Err(e) => {
+                let error = format!("Failed to save config: {}", e);
+                self.last_error = Some(error.clone());
+                Err(error)
+            }
+        }
+    }
+
+    pub fn cancel_config_edit(&mut self) {
+        self.show_config = false;
+        self.config_editor = ConfigEditor::new(&self.config);
+    }
+}
+
+impl ConfigEditor {
+    pub fn new(config: &Config) -> Self {
+        let mut run_input = Input::default();
+        run_input = run_input.with_value(config.mop.run.clone());
+        
+        Self {
+            run_input,
+            auto_close: config.mop.auto_close,
+            selected_field: ConfigField::Run,
+        }
+    }
+
+    pub fn next_field(&mut self) {
+        self.selected_field = match self.selected_field {
+            ConfigField::Run => ConfigField::AutoClose,
+            ConfigField::AutoClose => ConfigField::Run,
+        };
+    }
+
+    pub fn previous_field(&mut self) {
+        self.selected_field = match self.selected_field {
+            ConfigField::Run => ConfigField::AutoClose,
+            ConfigField::AutoClose => ConfigField::Run,
+        };
+    }
+
+    pub fn toggle_auto_close(&mut self) {
+        if self.selected_field == ConfigField::AutoClose {
+            self.auto_close = !self.auto_close;
+        }
+    }
+
+    pub fn handle_key(&mut self, key: ratatui::crossterm::event::KeyEvent) -> bool {
+        use ratatui::crossterm::event::{KeyCode, Event};
+        use tui_input::backend::crossterm::EventHandler;
+        
+        match self.selected_field {
+            ConfigField::Run => {
+                // Convert KeyEvent to Event for tui-input
+                let event = Event::Key(key);
+                self.run_input.handle_event(&event);
+                true
+            }
+            ConfigField::AutoClose => {
+                match key.code {
+                    KeyCode::Char(' ') | KeyCode::Enter => {
+                        self.toggle_auto_close();
+                        true
+                    }
+                    _ => false
+                }
+            }
+        }
     }
 }

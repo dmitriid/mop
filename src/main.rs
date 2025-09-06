@@ -12,6 +12,7 @@ use ratatui::{
 };
 
 mod app;
+mod config;
 mod ui;
 mod upnp;
 
@@ -55,38 +56,75 @@ fn run_app<B: ratatui::backend::Backend>(
         // Check for discovery updates
         app.check_discovery_updates();
         
+        // Check if we should quit (for auto-close)
+        if app.should_quit {
+            return Ok(());
+        }
+        
         terminal.draw(|f| ui::draw(f, &mut app))?;
 
         // Use a timeout so we can update UI while discovery runs
         if let Ok(true) = event::poll(Duration::from_millis(100)) {
             if let Event::Key(key) = event::read()? {
+
+                
+                // Handle config modal first
+                if app.show_config {
+                    match key.code {
+                        KeyCode::Esc => app.cancel_config_edit(),
+                        KeyCode::Enter => {
+                            if let Err(e) = app.save_config() {
+                                app.last_error = Some(e);
+                            }
+                        }
+                        KeyCode::Tab => app.config_editor.next_field(),
+                        KeyCode::BackTab => app.config_editor.previous_field(),
+                        KeyCode::Char(' ') => app.config_editor.toggle_auto_close(),
+                        _ => {
+                            app.config_editor.handle_key(key);
+                        }
+                    }
+                    continue;
+                }
+
+                // Handle help modal next
+                if app.show_help {
+                    match key.code {
+                        KeyCode::Char('?') | KeyCode::Esc => {
+                            app.toggle_help();
+                            continue;
+                        }
+                        _ => continue, // Block other keys while help is shown
+                    }
+                }
+                
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
                     KeyCode::Char('?') => app.toggle_help(),
-                    KeyCode::Char('e') => {
-                        // Copy errors to system clipboard
-                        if !app.discovery_errors.is_empty() {
-                            let errors_text = app.discovery_errors.iter()
-                                .enumerate()
-                                .map(|(i, error)| format!("{}. {}", i + 1, error))
-                                .collect::<Vec<_>>()
-                                .join("\n");
-                            
-                            match arboard::Clipboard::new() {
-                                Ok(mut clipboard) => {
-                                    if clipboard.set_text(&errors_text).is_ok() {
-                                        // Show confirmation by temporarily updating last_error
-                                        app.last_error = Some("Errors copied to clipboard".to_string());
-                                    } else {
-                                        app.last_error = Some("Failed to copy to clipboard".to_string());
+                    KeyCode::Char('c') => app.open_config_editor(),
+                            KeyCode::Char('e') => {
+                                // Copy errors to system clipboard
+                                if !app.discovery_errors.is_empty() {
+                                    let errors_text = app.discovery_errors.iter()
+                                        .enumerate()
+                                        .map(|(i, error)| format!("{}. {}", i + 1, error))
+                                        .collect::<Vec<_>>()
+                                        .join("\n");
+                                    
+                                    match arboard::Clipboard::new() {
+                                        Ok(mut clipboard) => {
+                                            if clipboard.set_text(&errors_text).is_ok() {
+                                                app.last_error = Some("Errors copied to clipboard".to_string());
+                                            } else {
+                                                app.last_error = Some("Failed to copy to clipboard".to_string());
+                                            }
+                                        }
+                                        Err(_) => {
+                                            app.last_error = Some("Clipboard not available".to_string());
+                                        }
                                     }
                                 }
-                                Err(_) => {
-                                    app.last_error = Some("Clipboard not available".to_string());
-                                }
                             }
-                        }
-                    }
                     KeyCode::Up => app.previous(),
                     KeyCode::Down => app.next(),
                     KeyCode::Enter => app.select(),

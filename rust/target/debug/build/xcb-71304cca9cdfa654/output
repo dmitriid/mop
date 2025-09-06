@@ -1,0 +1,4 @@
+cargo:rerun-if-changed=/home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xcb-0.8.2/build.rs
+cargo:rerun-if-changed=/home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xcb-0.8.2/rs_client.py
+cargo:rerun-if-changed=/home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xcb-0.8.2/xml
+cargo:rerun-if-changed=/home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xcb-0.8.2/xcbgen

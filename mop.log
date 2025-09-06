@@ -1,0 +1,381 @@
+2025/09/06 11:31:19 upnp.go:81: Starting UPnP discovery with callback...
+2025/09/06 11:31:19 upnp.go:84: Trying SSDP discovery...
+2025/09/06 11:31:19 upnp.go:711: Creating UDP socket for SSDP...
+2025/09/06 11:31:19 upnp.go:736: Sending M-SEARCH for root devices...
+2025/09/06 11:31:19 upnp.go:750: Sending M-SEARCH for media servers...
+2025/09/06 11:31:19 upnp.go:757: Waiting for SSDP responses...
+2025/09/06 11:31:19 upnp.go:773: Received SSDP response 1 from 192.168.1.21:34655 (length: 343)
+2025/09/06 11:31:19 app.go:162: Discovery started, servers count: 0
+2025/09/06 11:31:19 upnp.go:775: Parsed device: Device-61db6295 [upnp:rootdevice] (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:31:19 upnp.go:773: Received SSDP response 2 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:31:19 upnp.go:775: Parsed device: upnp:rootdevice [upnp:rootdevice] (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:31:19 app.go:175: Added device: Device-61db6295 [upnp:rootdevice] (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13), total servers: 1
+2025/09/06 11:31:19 app.go:175: Added device: upnp:rootdevice [upnp:rootdevice] (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0), total servers: 2
+2025/09/06 11:31:19 upnp.go:773: Received SSDP response 3 from 192.168.1.141:39496 (length: 474)
+2025/09/06 11:31:19 upnp.go:775: Parsed device: Device-dfc2264d [upnp:rootdevice] (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18) at http://192.168.1.141:8008/ssdp/device-desc.xml
+2025/09/06 11:31:19 app.go:175: Added device: Device-dfc2264d [upnp:rootdevice] (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18), total servers: 3
+2025/09/06 11:31:19 upnp.go:773: Received SSDP response 4 from 192.168.1.209:38635 (length: 739)
+2025/09/06 11:31:19 upnp.go:775: Parsed device: Device-RINCON_3 [upnp:rootdevice] (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.209:1400/xml/device_description.xml
+2025/09/06 11:31:19 upnp.go:773: Received SSDP response 5 from 192.168.1.21:34655 (length: 343)
+2025/09/06 11:31:19 upnp.go:775: Parsed device: Device-61db6295 [upnp:rootdevice] (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:31:19 app.go:175: Added device: Device-RINCON_3 [upnp:rootdevice] (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 4
+2025/09/06 11:31:19 upnp.go:773: Received SSDP response 6 from 192.168.1.208:43342 (length: 739)
+2025/09/06 11:31:19 upnp.go:775: Parsed device: Device-RINCON_3 [upnp:rootdevice] (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.208:1400/xml/device_description.xml
+2025/09/06 11:31:19 app.go:175: Added device: Device-RINCON_3 [upnp:rootdevice] (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 5
+2025/09/06 11:31:19 upnp.go:773: Received SSDP response 7 from 192.168.1.10:43890 (length: 748)
+2025/09/06 11:31:19 upnp.go:775: Parsed device: Device-RINCON_5 [urn:schemas-upnp-org:device:MediaServer:1] (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:31:19 app.go:175: Added device: Device-RINCON_5 [urn:schemas-upnp-org:device:MediaServer:1] (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)), total servers: 6
+2025/09/06 11:31:19 upnp.go:773: Received SSDP response 8 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:31:19 upnp.go:775: Parsed device: upnp:rootdevice [upnp:rootdevice] (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:31:19 upnp.go:773: Received SSDP response 9 from 192.168.1.10:57822 (length: 693)
+2025/09/06 11:31:19 upnp.go:775: Parsed device: Device-RINCON_5 [upnp:rootdevice] (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:31:20 upnp.go:773: Received SSDP response 10 from 192.168.1.20:1900 (length: 249)
+2025/09/06 11:31:20 upnp.go:775: Parsed device: Device-eed0031e [upnp:rootdevice] (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0) at http://192.168.1.20:80/upnp/BasicDevice.xml
+2025/09/06 11:31:20 app.go:175: Added device: Device-eed0031e [upnp:rootdevice] (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0), total servers: 7
+2025/09/06 11:31:21 upnp.go:773: Received SSDP response 11 from 192.168.1.21:35931 (length: 395)
+2025/09/06 11:31:21 upnp.go:775: Parsed device: Device-61db6295 [urn:schemas-upnp-org:device:MediaServer:1] (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:31:21 upnp.go:773: Received SSDP response 12 from 192.168.1.21:35931 (length: 395)
+2025/09/06 11:31:21 upnp.go:775: Parsed device: Device-61db6295 [urn:schemas-upnp-org:device:MediaServer:1] (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:31:22 upnp.go:764: SSDP timeout after 12 responses
+2025/09/06 11:31:22 upnp.go:86: SSDP found 7 devices, 0 errors
+2025/09/06 11:31:22 upnp.go:91: Trying port scan discovery...
+2025/09/06 11:31:39 upnp.go:93: Port scan found 0 devices, 0 errors
+2025/09/06 11:31:39 upnp.go:109: Total devices found: 7
+2025/09/06 11:31:39 app.go:186: Discovery completed, total servers: 7
+2025/09/06 11:33:05 upnp.go:81: Starting UPnP discovery with callback...
+2025/09/06 11:33:05 upnp.go:84: Trying SSDP discovery...
+2025/09/06 11:33:05 app.go:162: Discovery started, servers count: 0
+2025/09/06 11:33:05 upnp.go:759: Creating UDP socket for SSDP...
+2025/09/06 11:33:05 upnp.go:784: Sending M-SEARCH for root devices...
+2025/09/06 11:33:05 upnp.go:798: Sending M-SEARCH for media servers...
+2025/09/06 11:33:05 upnp.go:805: Waiting for SSDP responses...
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 1 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:33:05 app.go:175: Added device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0), total servers: 1
+2025/09/06 11:33:05 upnp.go:81: Starting UPnP discovery with callback...
+2025/09/06 11:33:05 upnp.go:84: Trying SSDP discovery...
+2025/09/06 11:33:05 upnp.go:759: Creating UDP socket for SSDP...
+2025/09/06 11:33:05 upnp.go:784: Sending M-SEARCH for root devices...
+2025/09/06 11:33:05 upnp.go:798: Sending M-SEARCH for media servers...
+2025/09/06 11:33:05 upnp.go:805: Waiting for SSDP responses...
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 1 from 192.168.1.21:32889 (length: 343)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 2 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:33:05 app.go:162: Discovery started, servers count: 0
+2025/09/06 11:33:05 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:33:05 app.go:175: Added device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13), total servers: 1
+2025/09/06 11:33:05 app.go:175: Added device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0), total servers: 2
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 3 from 192.168.1.141:41064 (length: 474)
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 2 from 192.168.1.141:56852 (length: 474)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18) at http://192.168.1.141:8008/ssdp/device-desc.xml
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18) at http://192.168.1.141:8008/ssdp/device-desc.xml
+2025/09/06 11:33:05 app.go:175: Added device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18), total servers: 3
+2025/09/06 11:33:05 app.go:175: Added device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18), total servers: 2
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 3 from 192.168.1.208:54695 (length: 739)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.208:1400/xml/device_description.xml
+2025/09/06 11:33:05 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 3
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 4 from 192.168.1.10:37044 (length: 748)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 5 from 192.168.1.21:32889 (length: 343)
+2025/09/06 11:33:05 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)), total servers: 4
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 4 from 192.168.1.10:43931 (length: 693)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:33:05 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)), total servers: 4
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 6 from 192.168.1.10:44622 (length: 693)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 7 from 192.168.1.209:35916 (length: 739)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.209:1400/xml/device_description.xml
+2025/09/06 11:33:05 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 5
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 8 from 192.168.1.208:46225 (length: 739)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.208:1400/xml/device_description.xml
+2025/09/06 11:33:05 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 6
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 5 from 192.168.1.209:41291 (length: 739)
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.209:1400/xml/device_description.xml
+2025/09/06 11:33:05 upnp.go:821: Received SSDP response 6 from 192.168.1.10:47654 (length: 748)
+2025/09/06 11:33:05 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 5
+2025/09/06 11:33:05 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 7 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:06 app.go:175: Added device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0), total servers: 6
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 8 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 9 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 10 from 192.168.1.21:44149 (length: 395)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 11 from 192.168.1.21:48975 (length: 343)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:06 app.go:175: Added device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13), total servers: 7
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 9 from 192.168.1.21:44763 (length: 395)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 12 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 13 from 192.168.1.21:44149 (length: 395)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 14 from 192.168.1.21:48975 (length: 343)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:06 upnp.go:821: Received SSDP response 10 from 192.168.1.21:44763 (length: 395)
+2025/09/06 11:33:06 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:07 upnp.go:821: Received SSDP response 11 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:33:07 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:33:07 upnp.go:821: Received SSDP response 15 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:33:07 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:07 upnp.go:821: Received SSDP response 16 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:33:07 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:07 upnp.go:821: Received SSDP response 17 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:33:07 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:07 upnp.go:821: Received SSDP response 18 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:33:07 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:07 upnp.go:821: Received SSDP response 19 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:33:07 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:07 upnp.go:821: Received SSDP response 20 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:33:07 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:08 upnp.go:812: SSDP timeout after 11 responses
+2025/09/06 11:33:08 upnp.go:86: SSDP found 6 devices, 0 errors
+2025/09/06 11:33:08 upnp.go:91: Trying port scan discovery...
+2025/09/06 11:33:08 upnp.go:821: Received SSDP response 21 from 192.168.1.20:1900 (length: 249)
+2025/09/06 11:33:08 upnp.go:823: Parsed device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0) at http://192.168.1.20:80/upnp/BasicDevice.xml
+2025/09/06 11:33:08 app.go:175: Added device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0), total servers: 8
+2025/09/06 11:33:08 upnp.go:821: Received SSDP response 22 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:33:08 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:08 upnp.go:821: Received SSDP response 23 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:33:08 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:08 upnp.go:821: Received SSDP response 24 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:33:08 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:09 upnp.go:812: SSDP timeout after 24 responses
+2025/09/06 11:33:09 upnp.go:86: SSDP found 8 devices, 0 errors
+2025/09/06 11:33:09 upnp.go:91: Trying port scan discovery...
+2025/09/06 11:33:25 upnp.go:81: Starting UPnP discovery with callback...
+2025/09/06 11:33:25 upnp.go:84: Trying SSDP discovery...
+2025/09/06 11:33:25 upnp.go:759: Creating UDP socket for SSDP...
+2025/09/06 11:33:25 upnp.go:784: Sending M-SEARCH for root devices...
+2025/09/06 11:33:25 upnp.go:798: Sending M-SEARCH for media servers...
+2025/09/06 11:33:25 upnp.go:805: Waiting for SSDP responses...
+2025/09/06 11:33:25 app.go:162: Discovery started, servers count: 0
+2025/09/06 11:33:25 upnp.go:821: Received SSDP response 1 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:33:25 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:33:25 app.go:175: Added device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0), total servers: 1
+2025/09/06 11:33:25 upnp.go:821: Received SSDP response 2 from 192.168.1.141:40595 (length: 474)
+2025/09/06 11:33:25 upnp.go:823: Parsed device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18) at http://192.168.1.141:8008/ssdp/device-desc.xml
+2025/09/06 11:33:25 app.go:175: Added device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18), total servers: 2
+2025/09/06 11:33:25 upnp.go:821: Received SSDP response 3 from 192.168.1.10:38651 (length: 693)
+2025/09/06 11:33:25 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:33:25 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)), total servers: 3
+2025/09/06 11:33:25 upnp.go:821: Received SSDP response 4 from 192.168.1.10:53177 (length: 748)
+2025/09/06 11:33:25 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:33:25 upnp.go:821: Received SSDP response 5 from 192.168.1.209:42534 (length: 739)
+2025/09/06 11:33:25 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.209:1400/xml/device_description.xml
+2025/09/06 11:33:25 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 4
+2025/09/06 11:33:25 upnp.go:821: Received SSDP response 6 from 192.168.1.208:54130 (length: 739)
+2025/09/06 11:33:25 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.208:1400/xml/device_description.xml
+2025/09/06 11:33:25 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 5
+2025/09/06 11:33:25 upnp.go:821: Received SSDP response 7 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:33:25 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:33:26 upnp.go:821: Received SSDP response 8 from 192.168.1.21:59763 (length: 343)
+2025/09/06 11:33:26 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:26 upnp.go:821: Received SSDP response 9 from 192.168.1.21:51798 (length: 395)
+2025/09/06 11:33:26 app.go:175: Added device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13), total servers: 6
+2025/09/06 11:33:26 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:26 upnp.go:821: Received SSDP response 10 from 192.168.1.21:59763 (length: 343)
+2025/09/06 11:33:26 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:26 upnp.go:821: Received SSDP response 11 from 192.168.1.21:51798 (length: 395)
+2025/09/06 11:33:26 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:33:26 upnp.go:93: Port scan found 0 devices, 0 errors
+2025/09/06 11:33:26 upnp.go:109: Total devices found: 8
+2025/09/06 11:33:26 app.go:186: Discovery completed, total servers: 8
+2025/09/06 11:33:27 upnp.go:821: Received SSDP response 12 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:33:27 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:27 app.go:175: Added device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0), total servers: 7
+2025/09/06 11:33:27 upnp.go:821: Received SSDP response 13 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:33:27 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:27 upnp.go:821: Received SSDP response 14 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:33:27 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:27 upnp.go:821: Received SSDP response 15 from 192.168.1.20:1900 (length: 249)
+2025/09/06 11:33:27 upnp.go:823: Parsed device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0) at http://192.168.1.20:80/upnp/BasicDevice.xml
+2025/09/06 11:33:27 app.go:175: Added device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0), total servers: 8
+2025/09/06 11:33:28 upnp.go:821: Received SSDP response 16 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:33:28 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:28 upnp.go:821: Received SSDP response 17 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:33:28 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:28 upnp.go:821: Received SSDP response 18 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:33:28 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:29 upnp.go:821: Received SSDP response 19 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:33:29 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:29 upnp.go:821: Received SSDP response 20 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:33:29 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:33:29 upnp.go:821: Received SSDP response 21 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:33:29 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:18 upnp.go:81: Starting UPnP discovery with callback...
+2025/09/06 11:34:18 upnp.go:84: Trying SSDP discovery...
+2025/09/06 11:34:18 upnp.go:759: Creating UDP socket for SSDP...
+2025/09/06 11:34:18 upnp.go:784: Sending M-SEARCH for root devices...
+2025/09/06 11:34:18 upnp.go:798: Sending M-SEARCH for media servers...
+2025/09/06 11:34:18 upnp.go:805: Waiting for SSDP responses...
+2025/09/06 11:34:18 app.go:162: Discovery started, servers count: 0
+2025/09/06 11:34:18 upnp.go:821: Received SSDP response 1 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:34:18 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:34:18 app.go:175: Added device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0), total servers: 1
+2025/09/06 11:34:18 upnp.go:821: Received SSDP response 2 from 192.168.1.141:43751 (length: 474)
+2025/09/06 11:34:18 upnp.go:823: Parsed device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18) at http://192.168.1.141:8008/ssdp/device-desc.xml
+2025/09/06 11:34:18 app.go:175: Added device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18), total servers: 2
+2025/09/06 11:34:18 upnp.go:821: Received SSDP response 3 from 192.168.1.10:40362 (length: 693)
+2025/09/06 11:34:18 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:34:18 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)), total servers: 3
+2025/09/06 11:34:18 upnp.go:821: Received SSDP response 4 from 192.168.1.10:39366 (length: 748)
+2025/09/06 11:34:18 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:34:18 upnp.go:821: Received SSDP response 5 from 192.168.1.208:48817 (length: 739)
+2025/09/06 11:34:18 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.208:1400/xml/device_description.xml
+2025/09/06 11:34:18 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 4
+2025/09/06 11:34:18 upnp.go:821: Received SSDP response 6 from 192.168.1.209:37668 (length: 739)
+2025/09/06 11:34:18 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.209:1400/xml/device_description.xml
+2025/09/06 11:34:18 app.go:175: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 5
+2025/09/06 11:34:18 upnp.go:821: Received SSDP response 7 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:34:18 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:18 app.go:175: Added device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0), total servers: 6
+2025/09/06 11:34:18 upnp.go:821: Received SSDP response 8 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:34:18 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:18 upnp.go:821: Received SSDP response 9 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:34:18 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:19 upnp.go:821: Received SSDP response 10 from 192.168.1.21:47883 (length: 343)
+2025/09/06 11:34:19 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:34:19 app.go:175: Added device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13), total servers: 7
+2025/09/06 11:34:19 upnp.go:821: Received SSDP response 11 from 192.168.1.21:47883 (length: 343)
+2025/09/06 11:34:19 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:34:19 upnp.go:821: Received SSDP response 12 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:34:19 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:19 upnp.go:821: Received SSDP response 13 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:34:19 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:34:19 upnp.go:821: Received SSDP response 14 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:34:19 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:19 upnp.go:821: Received SSDP response 15 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:34:19 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:20 upnp.go:821: Received SSDP response 16 from 192.168.1.20:1900 (length: 249)
+2025/09/06 11:34:20 upnp.go:823: Parsed device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0) at http://192.168.1.20:80/upnp/BasicDevice.xml
+2025/09/06 11:34:20 app.go:175: Added device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0), total servers: 8
+2025/09/06 11:34:20 upnp.go:821: Received SSDP response 17 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:34:20 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:20 upnp.go:821: Received SSDP response 18 from 192.168.1.21:34227 (length: 395)
+2025/09/06 11:34:20 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:34:20 upnp.go:821: Received SSDP response 19 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:34:20 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:20 upnp.go:821: Received SSDP response 20 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:34:20 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:20 upnp.go:821: Received SSDP response 21 from 192.168.1.21:34227 (length: 395)
+2025/09/06 11:34:20 upnp.go:823: Parsed device: Device 61db6295 (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:34:21 upnp.go:821: Received SSDP response 22 from 192.168.1.39:1900 (length: 291)
+2025/09/06 11:34:21 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:21 upnp.go:821: Received SSDP response 23 from 192.168.1.39:1900 (length: 300)
+2025/09/06 11:34:21 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:21 upnp.go:821: Received SSDP response 24 from 192.168.1.39:1900 (length: 294)
+2025/09/06 11:34:21 upnp.go:823: Parsed device: Philips Hue Bridge (Hue/1.0 UPnP/1.0 IpBridge/1.73.0) at http://192.168.1.39:80/description.xml
+2025/09/06 11:34:22 upnp.go:812: SSDP timeout after 24 responses
+2025/09/06 11:34:22 upnp.go:86: SSDP found 8 devices, 0 errors
+2025/09/06 11:34:22 upnp.go:91: Trying port scan discovery...
+2025/09/06 11:34:39 upnp.go:93: Port scan found 0 devices, 0 errors
+2025/09/06 11:34:39 upnp.go:109: Total devices found: 8
+2025/09/06 11:34:39 app.go:186: Discovery completed, total servers: 8
+2025/09/06 11:35:48 upnp.go:81: Starting UPnP discovery with callback...
+2025/09/06 11:35:48 upnp.go:84: Trying SSDP discovery...
+2025/09/06 11:35:48 upnp.go:759: Creating UDP socket for SSDP...
+2025/09/06 11:35:48 upnp.go:784: Sending M-SEARCH for root devices...
+2025/09/06 11:35:48 upnp.go:798: Sending M-SEARCH for media servers...
+2025/09/06 11:35:48 upnp.go:805: Waiting for SSDP responses...
+2025/09/06 11:35:48 upnp.go:821: Received SSDP response 1 from 192.168.1.21:34665 (length: 343)
+2025/09/06 11:35:48 upnp.go:823: Parsed device: Plex Media Server (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:35:48 upnp.go:821: Received SSDP response 2 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:35:48 app.go:166: Discovery started, servers count: 0
+2025/09/06 11:35:48 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:35:48 app.go:179: Added device: Plex Media Server (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13), total servers: 1
+2025/09/06 11:35:48 upnp.go:821: Received SSDP response 3 from 192.168.1.141:49909 (length: 474)
+2025/09/06 11:35:48 app.go:179: Added device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0), total servers: 2
+2025/09/06 11:35:48 upnp.go:823: Parsed device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18) at http://192.168.1.141:8008/ssdp/device-desc.xml
+2025/09/06 11:35:48 app.go:179: Added device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18), total servers: 3
+2025/09/06 11:35:48 upnp.go:821: Received SSDP response 4 from 192.168.1.10:36332 (length: 693)
+2025/09/06 11:35:48 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:35:48 app.go:179: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)), total servers: 4
+2025/09/06 11:35:48 upnp.go:821: Received SSDP response 5 from 192.168.1.21:34665 (length: 343)
+2025/09/06 11:35:48 upnp.go:823: Parsed device: Plex Media Server (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:35:48 upnp.go:821: Received SSDP response 6 from 192.168.1.208:38299 (length: 739)
+2025/09/06 11:35:48 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.208:1400/xml/device_description.xml
+2025/09/06 11:35:48 upnp.go:821: Received SSDP response 7 from 192.168.1.209:42632 (length: 739)
+2025/09/06 11:35:48 app.go:179: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 5
+2025/09/06 11:35:48 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.209:1400/xml/device_description.xml
+2025/09/06 11:35:49 app.go:179: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 6
+2025/09/06 11:35:49 upnp.go:821: Received SSDP response 8 from 192.168.1.10:36400 (length: 748)
+2025/09/06 11:35:49 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:35:49 upnp.go:821: Received SSDP response 9 from 192.168.1.21:48407 (length: 395)
+2025/09/06 11:35:49 upnp.go:823: Parsed device: Plex Media Server (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:35:49 upnp.go:821: Received SSDP response 10 from 192.168.1.21:48407 (length: 395)
+2025/09/06 11:35:49 upnp.go:823: Parsed device: Plex Media Server (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:35:50 upnp.go:821: Received SSDP response 11 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:35:50 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:35:50 upnp.go:821: Received SSDP response 12 from 192.168.1.20:1900 (length: 249)
+2025/09/06 11:35:50 upnp.go:823: Parsed device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0) at http://192.168.1.20:80/upnp/BasicDevice.xml
+2025/09/06 11:35:50 app.go:179: Added device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0), total servers: 7
+2025/09/06 11:35:51 upnp.go:812: SSDP timeout after 12 responses
+2025/09/06 11:35:51 upnp.go:86: SSDP found 7 devices, 0 errors
+2025/09/06 11:35:51 upnp.go:91: Trying port scan discovery...
+2025/09/06 11:35:55 upnp.go:81: Starting UPnP discovery with callback...
+2025/09/06 11:35:55 upnp.go:84: Trying SSDP discovery...
+2025/09/06 11:35:55 upnp.go:759: Creating UDP socket for SSDP...
+2025/09/06 11:35:55 upnp.go:784: Sending M-SEARCH for root devices...
+2025/09/06 11:35:55 upnp.go:798: Sending M-SEARCH for media servers...
+2025/09/06 11:35:55 upnp.go:805: Waiting for SSDP responses...
+2025/09/06 11:35:55 upnp.go:821: Received SSDP response 1 from 192.168.1.21:38140 (length: 343)
+2025/09/06 11:35:55 upnp.go:823: Parsed device: Plex Media Server (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:35:55 upnp.go:821: Received SSDP response 2 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:35:55 app.go:166: Discovery started, servers count: 0
+2025/09/06 11:35:55 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:35:55 app.go:179: Added device: Plex Media Server (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13), total servers: 1
+2025/09/06 11:35:55 app.go:179: Added device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0), total servers: 2
+2025/09/06 11:35:55 upnp.go:821: Received SSDP response 3 from 192.168.1.209:59359 (length: 739)
+2025/09/06 11:35:55 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.209:1400/xml/device_description.xml
+2025/09/06 11:35:55 app.go:179: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 3
+2025/09/06 11:35:55 upnp.go:821: Received SSDP response 4 from 192.168.1.21:38140 (length: 343)
+2025/09/06 11:35:55 upnp.go:823: Parsed device: Plex Media Server (UPnP/1.0 DLNADOC/1.50 Platinum/1.0.5.13) at http://192.168.1.21:32469/DeviceDescription.xml
+2025/09/06 11:35:56 upnp.go:821: Received SSDP response 5 from 192.168.1.10:58719 (length: 693)
+2025/09/06 11:35:56 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:35:56 upnp.go:821: Received SSDP response 6 from 192.168.1.208:47308 (length: 739)
+2025/09/06 11:35:56 app.go:179: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)), total servers: 4
+2025/09/06 11:35:56 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.208:1400/xml/device_description.xml
+2025/09/06 11:35:56 app.go:179: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 5
+2025/09/06 11:35:56 upnp.go:821: Received SSDP response 7 from 192.168.1.20:1900 (length: 249)
+2025/09/06 11:35:56 upnp.go:823: Parsed device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0) at http://192.168.1.20:80/upnp/BasicDevice.xml
+2025/09/06 11:35:56 app.go:179: Added device: HP iLO Server (HP-iLO-4/2.77 UPnP/1.0 HP-iLO/2.0), total servers: 6
+2025/09/06 11:35:56 upnp.go:821: Received SSDP response 8 from 192.168.1.141:57211 (length: 474)
+2025/09/06 11:35:56 upnp.go:823: Parsed device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18) at http://192.168.1.141:8008/ssdp/device-desc.xml
+2025/09/06 11:35:56 app.go:179: Added device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18), total servers: 7
+2025/09/06 11:35:57 upnp.go:812: SSDP timeout after 8 responses
+2025/09/06 11:35:57 upnp.go:86: SSDP found 7 devices, 0 errors
+2025/09/06 11:35:57 upnp.go:91: Trying port scan discovery...
+2025/09/06 11:36:10 upnp.go:81: Starting UPnP discovery with callback...
+2025/09/06 11:36:10 upnp.go:84: Trying SSDP discovery...
+2025/09/06 11:36:10 upnp.go:759: Creating UDP socket for SSDP...
+2025/09/06 11:36:10 upnp.go:784: Sending M-SEARCH for root devices...
+2025/09/06 11:36:10 upnp.go:798: Sending M-SEARCH for media servers...
+2025/09/06 11:36:10 upnp.go:805: Waiting for SSDP responses...
+2025/09/06 11:36:10 upnp.go:821: Received SSDP response 1 from 192.168.1.32:38064 (length: 322)
+2025/09/06 11:36:10 upnp.go:823: Parsed device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0) at http://192.168.1.32:40000/device.xml
+2025/09/06 11:36:10 app.go:167: Discovery started, servers count: 0
+2025/09/06 11:36:10 app.go:180: Added device: UPnP Device (async-upnp-client/0.44.0 UPnP/2.0 Server/1.0), total servers: 1
+2025/09/06 11:36:10 upnp.go:821: Received SSDP response 2 from 192.168.1.141:40858 (length: 474)
+2025/09/06 11:36:10 upnp.go:823: Parsed device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18) at http://192.168.1.141:8008/ssdp/device-desc.xml
+2025/09/06 11:36:10 app.go:180: Added device: Chromecast (Linux/5.15.153-android14-11-maybe-dirty, UPnP/1.0, Chromecast/1.6.18), total servers: 2
+2025/09/06 11:36:10 upnp.go:821: Received SSDP response 3 from 192.168.1.209:36396 (length: 739)
+2025/09/06 11:36:10 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.209:1400/xml/device_description.xml
+2025/09/06 11:36:10 app.go:180: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 3
+2025/09/06 11:36:10 upnp.go:821: Received SSDP response 4 from 192.168.1.10:43460 (length: 748)
+2025/09/06 11:36:10 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:36:10 app.go:180: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)), total servers: 4
+2025/09/06 11:36:11 upnp.go:821: Received SSDP response 5 from 192.168.1.10:39263 (length: 693)
+2025/09/06 11:36:11 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/86.0-67170 (ZPS9)) at http://192.168.1.10:1400/xml/device_description.xml
+2025/09/06 11:36:11 upnp.go:821: Received SSDP response 6 from 192.168.1.208:40192 (length: 739)
+2025/09/06 11:36:11 upnp.go:823: Parsed device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)) at http://192.168.1.208:1400/xml/device_description.xml
+2025/09/06 11:36:11 app.go:180: Added device: Sonos Speaker (Linux UPnP/1.0 Sonos/90.0-68140 (ZPS33)), total servers: 5
+2025/09/06 11:36:12 upnp.go:812: SSDP timeout after 6 responses
+2025/09/06 11:36:12 upnp.go:86: SSDP found 5 devices, 0 errors
+2025/09/06 11:36:12 upnp.go:91: Trying port scan discovery...
+2025/09/06 11:36:14 upnp.go:93: Port scan found 0 devices, 0 errors
+2025/09/06 11:36:14 upnp.go:109: Total devices found: 7
+2025/09/06 11:36:14 app.go:190: Discovery completed, total servers: 7

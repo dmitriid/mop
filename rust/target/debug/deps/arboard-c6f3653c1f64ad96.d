@@ -1,0 +1,11 @@
+/home/dmitriid/Projects/mop/rust/target/debug/deps/arboard-c6f3653c1f64ad96.d: /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/lib.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/common.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/mod.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/linux/mod.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/linux/x11.rs
+
+/home/dmitriid/Projects/mop/rust/target/debug/deps/libarboard-c6f3653c1f64ad96.rlib: /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/lib.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/common.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/mod.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/linux/mod.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/linux/x11.rs
+
+/home/dmitriid/Projects/mop/rust/target/debug/deps/libarboard-c6f3653c1f64ad96.rmeta: /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/lib.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/common.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/mod.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/linux/mod.rs /home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/linux/x11.rs
+
+/home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/lib.rs:
+/home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/common.rs:
+/home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/mod.rs:
+/home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/linux/mod.rs:
+/home/dmitriid/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/arboard-3.6.1/src/platform/linux/x11.rs:

@@ -2,7 +2,7 @@
 
 A purely vibe-coded TUI to browse UPnP services on the local network. Main use-case: using in [Omarchy](https://omarchy.org/).
 
-For some reason both Plex and VLC struggle with plaing media from my home Plex server. MPV plays it just fine when provided a direct URL. So my biggest gripe was: not good way of quickly navigating to what I want and invoking `mpv <direct url to file on plex>`.
+For some reason both Plex and VLC struggle with playing media from my home Plex server. MPV plays it just fine when provided a direct URL. So my biggest gripe was: not good way of quickly navigating to what I want and invoking `mpv <direct url to file on plex>`.
 
 So I vibecoded this.
 

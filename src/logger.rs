@@ -107,3 +107,58 @@ impl LogEntry {
 pub type LogBuffer = Arc<Mutex<VecDeque<LogEntry>>>;
 
 pub const LOG_BUFFER_CAPACITY: usize = 2000;
+
+pub struct RingBufferLogger {
+    buffer: LogBuffer,
+}
+
+impl RingBufferLogger {
+    pub fn new() -> (Self, LogBuffer) {
+        let buffer = Arc::new(Mutex::new(VecDeque::with_capacity(LOG_BUFFER_CAPACITY)));
+        let buffer_handle = Arc::clone(&buffer);
+        (Self { buffer }, buffer_handle)
+    }
+}
+
+impl log::Log for RingBufferLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Trace
+    }
+
+    fn log(&self, record: &log::Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+
+        let entry = LogEntry {
+            timestamp: Local::now(),
+            category: LogCategory::from_target(record.target()),
+            severity: LogSeverity::from(record.level()),
+            message: record.args().to_string(),
+        };
+
+        if let Ok(mut buffer) = self.buffer.lock() {
+            if buffer.len() >= LOG_BUFFER_CAPACITY {
+                buffer.pop_front();
+            }
+            buffer.push_back(entry);
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+static LOGGER: OnceLock<RingBufferLogger> = OnceLock::new();
+
+pub fn init_logger() -> LogBuffer {
+    let (logger, buffer) = RingBufferLogger::new();
+
+    if LOGGER.set(logger).is_ok() {
+        if let Some(logger) = LOGGER.get() {
+            log::set_logger(logger).expect("Failed to set logger");
+            log::set_max_level(log::LevelFilter::Trace);
+        }
+    }
+
+    buffer
+}

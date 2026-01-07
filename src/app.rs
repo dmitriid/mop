@@ -1,3 +1,4 @@
+use crate::logger::LogBuffer;
 use crate::upnp::{PlexServer, DiscoveryMessage};
 use crate::config::Config;
 use std::sync::mpsc::Receiver;
@@ -30,6 +31,7 @@ pub struct App {
     pub container_id_map: HashMap<Vec<String>, String>,
     pub config: Config,
     pub config_editor: ConfigEditor,
+    pub log_buffer: LogBuffer,
 }
 
 pub struct ConfigEditor {
@@ -60,10 +62,10 @@ pub struct FileMetadata {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(log_buffer: LogBuffer) -> Self {
         let config = Config::load();
         let config_editor = ConfigEditor::new(&config);
-        
+
         let mut app = Self {
             state: AppState::ServerList,
             servers: Vec::new(),
@@ -82,8 +84,9 @@ impl App {
             container_id_map: HashMap::new(),
             config,
             config_editor,
+            log_buffer,
         };
-        
+
         // Initialize with root container ID
         app.container_id_map.insert(Vec::new(), "0".to_string());
         app

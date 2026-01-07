@@ -20,6 +20,11 @@ mod upnp;
 use app::App;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Initialize logger first
+    let log_buffer = logger::init_logger();
+
+    log::info!(target: "mop::app", "MOP starting up");
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -28,7 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create app and run it
-    let mut app = App::new();
+    let mut app = App::new(log_buffer);
     app.start_discovery();
     let res = run_app(&mut terminal, app);
 

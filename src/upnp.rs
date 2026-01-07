@@ -39,23 +39,26 @@ pub fn start_discovery() -> Receiver<DiscoveryMessage> {
 }
 
 async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
+    log::info!(target: "mop::upnp", "Starting UPnP discovery (rupnp)");
     let mut devices = Vec::new();
-    
+
     // Search for all UPnP root devices using the new API
     match rupnp::discover(&SearchTarget::RootDevice, Duration::from_secs(5), None).await {
         Ok(device_stream) => {
             use futures_util::StreamExt;
-            
+            log::debug!(target: "mop::upnp", "rupnp discovery stream started, timeout=5s");
+
             let mut stream = Box::pin(device_stream);
             let mut device_count = 0;
             
             while let Some(device_result) = stream.next().await {
                 if let Ok(device) = device_result {
                     device_count += 1;
-                    
+
                     let device_url = device.url().to_string();
                     let device_type = device.device_type().to_string();
                     let friendly_name = device.friendly_name().to_string();
+                    log::info!(target: "mop::upnp", "Found device #{}: {} ({})", device_count, friendly_name, device_url);
                     
                     
                     // Special handling for Plex servers
@@ -77,8 +80,15 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
                     
                     // Fetch device description to get real service URLs
                     let content_directory_url = match fetch_device_description(&device_url).await {
-                        Ok(desc) => parse_content_directory_url(&desc, &device_url),
+                        Ok(desc) => {
+                            let url = parse_content_directory_url(&desc, &device_url);
+                            if let Some(ref u) = url {
+                                log::debug!(target: "mop::upnp", "ContentDirectory URL for {}: {}", friendly_name, u);
+                            }
+                            url
+                        }
                         Err(e) => {
+                            log::warn!(target: "mop::upnp", "Failed to fetch device description for {}: {}", friendly_name, e);
                             None
                         }
                     };
@@ -102,19 +112,23 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
             }
         }
         Err(e) => {
+            log::error!(target: "mop::upnp", "UPnP discovery failed: {}", e);
             sender.send(DiscoveryMessage::Error(format!("UPnP discovery failed: {}", e))).ok();
         }
     }
-    
+
+    log::info!(target: "mop::upnp", "Phase 1 complete: found {} devices", devices.len());
     sender.send(DiscoveryMessage::Phase1Complete).ok();
     
     // Note: rupnp 3.0 discovery already finds all devices including media servers
-    
+    log::debug!(target: "mop::upnp", "Phase 2 complete (extended discovery)");
     sender.send(DiscoveryMessage::Phase2Complete).ok();
-    
+
     // Try port scanning as fallback
+    log::debug!(target: "mop::upnp", "Starting port scan fallback");
     match targeted_port_scan().await {
         Ok(scan_devices) => {
+            log::info!(target: "mop::upnp", "Port scan found {} additional devices", scan_devices.len());
             for device in scan_devices {
                 if !devices.iter().any(|d| d.location == device.location) {
                     sender.send(DiscoveryMessage::DeviceFound(device.clone())).ok();
@@ -123,10 +137,12 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
             }
         }
         Err(e) => {
+            log::warn!(target: "mop::upnp", "Port scan failed: {}", e);
             sender.send(DiscoveryMessage::Error(format!("Port scan failed: {}", e))).ok();
         }
     }
-    
+
+    log::info!(target: "mop::upnp", "Discovery complete: {} total devices", devices.len());
     sender.send(DiscoveryMessage::Phase3Complete).ok();
     sender.send(DiscoveryMessage::AllComplete(devices)).ok();
 }
@@ -358,10 +374,10 @@ pub fn browse_directory(server: &PlexServer, path: &[String], container_id_map: 
 }
 
 async fn async_browse_directory(server: &PlexServer, path: &[String], container_id_map: &mut std::collections::HashMap<Vec<String>, String>) -> (Vec<DirectoryItem>, Option<String>) {
+    log::debug!(target: "mop::upnp", "Browsing directory: /{}", path.join("/"));
     let mut items = Vec::new();
     let mut errors = Vec::new();
-    
-    
+
     // Determine container ID based on path using proper nested traversal
     let container_id = if path.is_empty() {
         "0".to_string() // Root container
@@ -391,8 +407,10 @@ async fn async_browse_directory(server: &PlexServer, path: &[String], container_
     
     // Always use UPnP ContentDirectory service
     if let Some(content_dir_url) = &server.content_directory_url {
+        log::debug!(target: "mop::soap", "SOAP Browse request to {} for container {}", content_dir_url, container_id);
         match browse_upnp_content_directory_with_id(content_dir_url, &container_id).await {
             Ok((upnp_items, container_mappings)) => {
+                log::info!(target: "mop::upnp", "Browse returned {} items", upnp_items.len());
                 // Update container ID mapping for navigation
                 for (title, container_id) in &container_mappings {
                     // Store the mapping for this path + title combination
@@ -419,13 +437,15 @@ async fn async_browse_directory(server: &PlexServer, path: &[String], container_
                 }
                 return (items, None);
             }
-                                Err(e) => {
-                        let error_msg = format!("UPnP ContentDirectory failed: {}", e);
-                        errors.push(error_msg);
-                    }
+            Err(e) => {
+                let error_msg = format!("UPnP ContentDirectory failed: {}", e);
+                log::error!(target: "mop::soap", "Browse failed for container {}: {}", container_id, e);
+                errors.push(error_msg);
+            }
         }
     } else {
         let error_msg = "No UPnP ContentDirectory service available".to_string();
+        log::warn!(target: "mop::upnp", "{}", error_msg);
         errors.push(error_msg);
     }
 

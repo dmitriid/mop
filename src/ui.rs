@@ -489,20 +489,20 @@ fn draw_help_modal(f: &mut Frame) {
     
     // Calculate centered modal size - make it bigger for more keys
     let modal_width = 65;
-    let modal_height = 18;
+    let modal_height = 28;
     let x = (area.width.saturating_sub(modal_width)) / 2;
     let y = (area.height.saturating_sub(modal_height)) / 2;
-    
+
     let modal_area = Rect {
         x,
         y,
         width: modal_width,
         height: modal_height,
     };
-    
+
     // Clear the background
     f.render_widget(Clear, modal_area);
-    
+
     let help_text = vec![
         Line::from(""),
         Line::from(vec![
@@ -526,11 +526,21 @@ fn draw_help_modal(f: &mut Frame) {
         ]),
         Line::from(CONFIG_KEY),
         Line::from(ERROR_KEY),
+        Line::from(LOG_KEY),
         Line::from(KEYS.help),
         Line::from(KEYS.quit),
         Line::from(""),
+        Line::from(vec![
+            Span::styled("Log Pane (when visible):", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from("j/k: scroll down/up"),
+        Line::from("t/b: jump to top/bottom"),
+        Line::from("/: filter logs"),
+        Line::from("s: save logs to file"),
+        Line::from("Esc: close log pane"),
+        Line::from(""),
     ];
-    
+
     let paragraph = Paragraph::new(help_text)
         .block(Block::default()
             .title("Help")
@@ -538,7 +548,7 @@ fn draw_help_modal(f: &mut Frame) {
             .borders(Borders::ALL)
             .style(Style::default().bg(Color::Black)))
         .alignment(Alignment::Center);
-    
+
     f.render_widget(paragraph, modal_area);
 }
 

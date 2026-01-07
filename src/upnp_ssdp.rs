@@ -61,18 +61,20 @@ impl SsdpDiscovery {
                     DiscoveryError::NetworkError(e)
                 }
             })?;
-        
+        log::info!(target: "mop::net", "SSDP socket bound to 0.0.0.0:0");
+
         socket.set_read_timeout(Some(Duration::from_millis(100)))?;
         socket.set_write_timeout(Some(Duration::from_millis(1000)))?;
         socket.set_nonblocking(false)?;
-        
+        log::debug!(target: "mop::net", "Socket read timeout: 100ms, write timeout: 1000ms");
+
         let multicast_addr: SocketAddr = "239.255.255.250:1900".parse()
             .map_err(|e| DiscoveryError::ParseError(format!("Invalid multicast address: {}", e)))?;
-        
+
         // Join multicast group with detailed error handling
         let multicast_ip = Ipv4Addr::new(239, 255, 255, 250);
         let interface_ip = Ipv4Addr::new(0, 0, 0, 0);
-        
+
         socket.join_multicast_v4(&multicast_ip, &interface_ip)
             .map_err(|e| {
                 match e.kind() {
@@ -80,7 +82,8 @@ impl SsdpDiscovery {
                     _ => DiscoveryError::NetworkError(e),
                 }
             })?;
-        
+        log::info!(target: "mop::net", "Joined multicast group 239.255.255.250 on interface 0.0.0.0");
+
         Ok(Self {
             socket,
             multicast_addr,
@@ -103,7 +106,8 @@ impl SsdpDiscovery {
                     _ => DiscoveryError::NetworkError(e),
                 }
             })?;
-        
+        log::info!(target: "mop::ssdp", "Sent M-SEARCH for upnp:rootdevice to 239.255.255.250:1900");
+
         // Also send search for media devices specifically
         let media_search = "M-SEARCH * HTTP/1.1\r\n\
                            HOST: 239.255.255.250:1900\r\n\
@@ -112,7 +116,8 @@ impl SsdpDiscovery {
                            MX: 3\r\n\r\n";
         
         let _ = self.socket.send_to(media_search.as_bytes(), self.multicast_addr);
-        
+        log::info!(target: "mop::ssdp", "Sent M-SEARCH for MediaServer:1 to 239.255.255.250:1900");
+
         // Collect responses with deduplication
         let mut devices = HashMap::new();
         let start_time = Instant::now();
@@ -123,6 +128,7 @@ impl SsdpDiscovery {
                 Ok((size, addr)) => {
                     if let Ok(response) = std::str::from_utf8(&buf[..size]) {
                         if let Some(device) = self.parse_ssdp_response(response, addr) {
+                            log::debug!(target: "mop::ssdp", "SSDP response from {}: {}", addr, device.location);
                             // Use location as key to avoid duplicates
                             devices.insert(device.location.clone(), device);
                         }
@@ -143,7 +149,8 @@ impl SsdpDiscovery {
         }
         
         let device_list: Vec<Device> = devices.into_values().collect();
-        
+        log::info!(target: "mop::ssdp", "SSDP discovery complete: found {} devices", device_list.len());
+
         if device_list.is_empty() {
             Err(DiscoveryError::NoDevicesFound)
         } else {
@@ -234,18 +241,21 @@ impl SsdpDiscovery {
 // Test if multicast capability is available
 pub fn test_multicast_capability() -> Result<(), DiscoveryError> {
     let socket = UdpSocket::bind("0.0.0.0:0")?;
+    log::debug!(target: "mop::net", "Multicast test: socket bound");
     socket.set_write_timeout(Some(Duration::from_millis(500)))?;
-    
+
     let multicast_ip = Ipv4Addr::new(239, 255, 255, 250);
     let interface_ip = Ipv4Addr::new(0, 0, 0, 0);
-    
+
     socket.join_multicast_v4(&multicast_ip, &interface_ip)?;
-    
+    log::debug!(target: "mop::net", "Multicast test: joined group 239.255.255.250");
+
     let test_message = b"TEST";
     let multicast_addr: SocketAddr = "239.255.255.250:1900".parse()
         .map_err(|e| DiscoveryError::ParseError(format!("Invalid address: {}", e)))?;
-    
+
     socket.send_to(test_message, multicast_addr)?;
-    
+    log::debug!(target: "mop::net", "Multicast test: sent test packet");
+
     Ok(())
 }

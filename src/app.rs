@@ -32,6 +32,12 @@ pub struct App {
     pub config: Config,
     pub config_editor: ConfigEditor,
     pub log_buffer: LogBuffer,
+    pub log_pane_state: LogPaneState,
+    pub log_scroll_offset: usize,
+    pub log_filter: String,
+    pub log_filter_input: String,
+    pub log_filter_active: bool,
+    pub log_auto_scroll: bool,
 }
 
 pub struct ConfigEditor {
@@ -44,6 +50,23 @@ pub struct ConfigEditor {
 pub enum ConfigField {
     Run,
     AutoClose,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LogPaneState {
+    Hidden,
+    Bottom,
+    Fullscreen,
+}
+
+impl LogPaneState {
+    pub fn next(self) -> Self {
+        match self {
+            LogPaneState::Hidden => LogPaneState::Bottom,
+            LogPaneState::Bottom => LogPaneState::Fullscreen,
+            LogPaneState::Fullscreen => LogPaneState::Hidden,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +108,12 @@ impl App {
             config,
             config_editor,
             log_buffer,
+            log_pane_state: LogPaneState::Hidden,
+            log_scroll_offset: 0,
+            log_filter: String::new(),
+            log_filter_input: String::new(),
+            log_filter_active: false,
+            log_auto_scroll: true,
         };
 
         // Initialize with root container ID
@@ -393,6 +422,124 @@ impl App {
     pub fn cancel_config_edit(&mut self) {
         self.show_config = false;
         self.config_editor = ConfigEditor::new(&self.config);
+    }
+
+    pub fn toggle_log_pane(&mut self) {
+        self.log_pane_state = self.log_pane_state.next();
+        if self.log_pane_state == LogPaneState::Hidden {
+            self.log_filter_active = false;
+        }
+    }
+
+    pub fn close_log_pane(&mut self) {
+        self.log_pane_state = LogPaneState::Hidden;
+        self.log_filter_active = false;
+    }
+
+    pub fn log_scroll_up(&mut self) {
+        if self.log_scroll_offset > 0 {
+            self.log_scroll_offset -= 1;
+            self.log_auto_scroll = false;
+        }
+    }
+
+    pub fn log_scroll_down(&mut self) {
+        self.log_scroll_offset += 1;
+        // Auto-scroll re-enabled by jump_to_bottom
+    }
+
+    pub fn log_jump_to_top(&mut self) {
+        self.log_scroll_offset = 0;
+        self.log_auto_scroll = false;
+    }
+
+    pub fn log_jump_to_bottom(&mut self) {
+        self.log_scroll_offset = usize::MAX; // Will be clamped in UI
+        self.log_auto_scroll = true;
+    }
+
+    pub fn start_log_filter(&mut self) {
+        self.log_filter_active = true;
+        self.log_filter_input = self.log_filter.clone();
+    }
+
+    pub fn confirm_log_filter(&mut self) {
+        self.log_filter = self.log_filter_input.clone();
+        self.log_filter_active = false;
+        self.log_scroll_offset = 0;
+    }
+
+    pub fn cancel_log_filter(&mut self) {
+        self.log_filter_input = self.log_filter.clone();
+        self.log_filter_active = false;
+    }
+
+    pub fn get_filtered_logs(&self) -> Vec<crate::logger::LogEntry> {
+        if let Ok(buffer) = self.log_buffer.lock() {
+            if self.log_filter.is_empty() {
+                buffer.iter().cloned().collect()
+            } else {
+                let filter_lower = self.log_filter.to_lowercase();
+                buffer
+                    .iter()
+                    .filter(|entry| {
+                        entry.format_line().to_lowercase().contains(&filter_lower)
+                    })
+                    .cloned()
+                    .collect()
+            }
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub fn export_logs(&self) -> Result<String, String> {
+        use std::io::Write;
+
+        let logs = if let Ok(buffer) = self.log_buffer.lock() {
+            buffer.iter().cloned().collect::<Vec<_>>()
+        } else {
+            return Err("Failed to access log buffer".to_string());
+        };
+
+        let cache_dir = dirs::cache_dir()
+            .ok_or_else(|| "Could not find cache directory".to_string())?
+            .join("mop");
+
+        std::fs::create_dir_all(&cache_dir)
+            .map_err(|e| format!("Failed to create cache directory: {}", e))?;
+
+        let filename = format!(
+            "debug-{}.log",
+            chrono::Local::now().format("%Y-%m-%d-%H%M%S")
+        );
+        let filepath = cache_dir.join(&filename);
+
+        let mut file = std::fs::File::create(&filepath)
+            .map_err(|e| format!("Failed to create log file: {}", e))?;
+
+        writeln!(
+            file,
+            "MOP Debug Log - Exported {}",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        )
+        .map_err(|e| format!("Write error: {}", e))?;
+
+        writeln!(file, "Filter: {}", if self.log_filter.is_empty() { "(none)" } else { &self.log_filter })
+            .map_err(|e| format!("Write error: {}", e))?;
+
+        writeln!(file, "Entries: {}", logs.len())
+            .map_err(|e| format!("Write error: {}", e))?;
+
+        writeln!(file, "\n---")
+            .map_err(|e| format!("Write error: {}", e))?;
+
+        for entry in &logs {
+            writeln!(file, "{}", entry.format_export_line())
+                .map_err(|e| format!("Write error: {}", e))?;
+        }
+
+        Ok(filepath.to_string_lossy().to_string())
     }
 }
 

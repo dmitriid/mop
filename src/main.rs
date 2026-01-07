@@ -103,12 +103,95 @@ fn run_app<B: ratatui::backend::Backend>(
                         _ => continue, // Block other keys while help is shown
                     }
                 }
-                
+
+                // Handle log pane keys when visible
+                if app.log_pane_state != crate::app::LogPaneState::Hidden {
+                    // Filter input mode
+                    if app.log_filter_active {
+                        match key.code {
+                            KeyCode::Esc => {
+                                app.cancel_log_filter();
+                                continue;
+                            }
+                            KeyCode::Enter => {
+                                app.confirm_log_filter();
+                                continue;
+                            }
+                            KeyCode::Backspace => {
+                                app.log_filter_input.pop();
+                                continue;
+                            }
+                            KeyCode::Char(c) => {
+                                app.log_filter_input.push(c);
+                                continue;
+                            }
+                            _ => continue,
+                        }
+                    }
+
+                    // Normal log pane keys
+                    match key.code {
+                        KeyCode::Char('l') => {
+                            app.toggle_log_pane();
+                            continue;
+                        }
+                        KeyCode::Esc => {
+                            app.close_log_pane();
+                            continue;
+                        }
+                        KeyCode::Up | KeyCode::Char('k') => {
+                            app.log_scroll_up();
+                            continue;
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            app.log_scroll_down();
+                            continue;
+                        }
+                        KeyCode::Char('t') => {
+                            app.log_jump_to_top();
+                            continue;
+                        }
+                        KeyCode::Char('b') => {
+                            app.log_jump_to_bottom();
+                            continue;
+                        }
+                        KeyCode::Char('/') => {
+                            app.start_log_filter();
+                            continue;
+                        }
+                        KeyCode::Char('s') => {
+                            match app.export_logs() {
+                                Ok(path) => {
+                                    log::info!(target: "mop::app", "Exported logs to {}", path);
+                                }
+                                Err(e) => {
+                                    log::error!(target: "mop::app", "Failed to export logs: {}", e);
+                                }
+                            }
+                            continue;
+                        }
+                        KeyCode::PageUp => {
+                            for _ in 0..10 {
+                                app.log_scroll_up();
+                            }
+                            continue;
+                        }
+                        KeyCode::PageDown => {
+                            for _ in 0..10 {
+                                app.log_scroll_down();
+                            }
+                            continue;
+                        }
+                        _ => {} // Fall through to main key handling
+                    }
+                }
+
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
                     KeyCode::Char('?') => app.toggle_help(),
                     KeyCode::Char('c') => app.open_config_editor(),
-                            KeyCode::Char('e') => {
+                    KeyCode::Char('l') => app.toggle_log_pane(),
+                    KeyCode::Char('e') => {
                                 // Copy errors to system clipboard
                                 if !app.discovery_errors.is_empty() {
                                     let errors_text = app.discovery_errors.iter()

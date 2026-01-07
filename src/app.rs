@@ -124,9 +124,11 @@ impl App {
     pub fn start_discovery(&mut self) {
         // Don't start if already running
         if self.discovery_receiver.is_some() {
+            log::debug!(target: "mop::app", "Discovery already in progress, skipping");
             return;
         }
-        
+
+        log::info!(target: "mop::app", "Starting device discovery");
         // Use the new simplified discovery system
         let receiver = crate::upnp::start_discovery();
         self.discovery_receiver = Some(receiver);
@@ -146,6 +148,7 @@ impl App {
                     DiscoveryMessage::DeviceFound(device) => {
                         // Add device immediately for responsive UI with proper deduplication
                         if !self.servers.iter().any(|d| d.location == device.location) {
+                            log::info!(target: "mop::app", "Device added to list: {}", device.name);
                             self.servers.push(device);
                         }
                     }
@@ -167,8 +170,10 @@ impl App {
                         }
                         self.is_discovering = false;
                         should_clear_receiver = true;
-                        
+                        log::info!(target: "mop::app", "Discovery complete: {} devices total", self.servers.len());
+
                         if self.servers.is_empty() {
+                            log::warn!(target: "mop::app", "No UPnP devices found");
                             self.last_error = Some("No UPnP devices found".to_string());
                         } else {
                             self.last_error = None;
@@ -338,12 +343,15 @@ impl App {
                 let item = &self.directory_contents[item_idx];
                 if !item.is_directory {
                     if let Some(url) = &item.url {
+                        log::info!(target: "mop::app", "Playing file: {}", item.name);
                         let result = self.invoke_player(url);
                         if result.is_ok() && self.config.mop.auto_close {
+                            log::info!(target: "mop::app", "Auto-close enabled, quitting");
                             self.should_quit = true;
                         }
                         return result;
                     } else {
+                        log::warn!(target: "mop::app", "No URL available for file: {}", item.name);
                         return Err("No URL available for this file".to_string());
                     }
                 } else {
@@ -360,9 +368,10 @@ impl App {
 
     fn invoke_player(&self, url: &str) -> Result<(), String> {
         use std::process::Command;
-        
+
         let player = &self.config.mop.run;
-        
+        log::debug!(target: "mop::app", "Invoking player: {} with URL: {}", player, url);
+
         // Use setsid with nohup for complete session detachment
         // This ensures the player runs completely independently of MOP
         let cmd_str = format!("setsid nohup {} '{}' </dev/null >/dev/null 2>&1 &", player, url);
@@ -370,11 +379,16 @@ impl App {
             .arg("-c")
             .arg(&cmd_str)
             .status()
-            .map_err(|e| format!("Failed to start {}: {}", player, e))?;
-        
+            .map_err(|e| {
+                log::error!(target: "mop::app", "Failed to start {}: {}", player, e);
+                format!("Failed to start {}: {}", player, e)
+            })?;
+
         if status.success() {
+            log::info!(target: "mop::app", "Player started successfully");
             Ok(())
         } else {
+            log::error!(target: "mop::app", "Player command failed");
             Err(format!("Failed to start {} command", player))
         }
     }

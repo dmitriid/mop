@@ -6,7 +6,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, AppState};
+use crate::app::{App, AppState, LogPaneState};
+use crate::logger::{LogCategory, LogSeverity, LogEntry};
 
 struct KeyMappings {
     navigate: &'static str,
@@ -30,71 +31,129 @@ const KEYS: KeyMappings = KeyMappings {
 
 const ERROR_KEY: &str = "e: dump errors";
 const CONFIG_KEY: &str = "c: config";
+const LOG_KEY: &str = "l: logs";
 
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     // Check if we have errors to show
     let has_errors = app.last_error.is_some() || !app.discovery_errors.is_empty();
-    
+
     // Get help text based on current state
     let help_text = match app.state {
         AppState::ServerList => {
             if has_errors {
-                format!("{} | {} | {} | {} | {} | {}", 
-                    KEYS.navigate, KEYS.select_server, ERROR_KEY, CONFIG_KEY, KEYS.help, KEYS.quit)
+                format!("{} | {} | {} | {} | {} | {} | {}",
+                    KEYS.navigate, KEYS.select_server, ERROR_KEY, LOG_KEY, CONFIG_KEY, KEYS.help, KEYS.quit)
             } else {
-                format!("{} | {} | {} | {} | {}", 
-                    KEYS.navigate, KEYS.select_server, CONFIG_KEY, KEYS.help, KEYS.quit)
+                format!("{} | {} | {} | {} | {} | {}",
+                    KEYS.navigate, KEYS.select_server, LOG_KEY, CONFIG_KEY, KEYS.help, KEYS.quit)
             }
         },
-        AppState::DirectoryBrowser => format!("{} | {} | {} | {} | {} | {}", 
-            KEYS.navigate, KEYS.open, KEYS.back, CONFIG_KEY, KEYS.help, KEYS.quit),
-        AppState::FileDetails => format!("{} | {} | {} | {}", 
-            KEYS.back_to_directory, CONFIG_KEY, KEYS.help, KEYS.quit),
-
+        AppState::DirectoryBrowser => format!("{} | {} | {} | {} | {} | {} | {}",
+            KEYS.navigate, KEYS.open, KEYS.back, LOG_KEY, CONFIG_KEY, KEYS.help, KEYS.quit),
+        AppState::FileDetails => format!("{} | {} | {} | {} | {}",
+            KEYS.back_to_directory, LOG_KEY, CONFIG_KEY, KEYS.help, KEYS.quit),
     };
-    
-    let [title_area, content_area, help_area] = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),  // Title
-            Constraint::Min(1),     // Main content
-            Constraint::Length(1),  // Help text
-        ])
-        .split(f.area())[..] else { return };
 
-    // Title
-    let title = Paragraph::new("MOP - UPnP Device Explorer")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-        .block(Block::default().borders(Borders::ALL));
-    f.render_widget(title, title_area);
+    // Determine if log pane is visible
+    let log_visible = app.log_pane_state != LogPaneState::Hidden;
+    let log_fullscreen = app.log_pane_state == LogPaneState::Fullscreen;
 
-    // Main content area - split horizontally if we have errors
-    if has_errors {
-        let [main_area, error_area] = Layout::default()
-            .direction(Direction::Horizontal)
+    if log_fullscreen {
+        // Fullscreen log pane
+        let [title_area, log_area, help_area] = Layout::default()
+            .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(70),  // Main content
-                Constraint::Percentage(30),  // Errors
+                Constraint::Length(3),
+                Constraint::Min(1),
+                Constraint::Length(1),
             ])
-            .split(content_area)[..] else { return };
-            
-        draw_main_content(f, app, main_area);
-        draw_error_panel(f, app, error_area);
+            .split(f.area())[..] else { return };
+
+        // Title
+        let title = Paragraph::new("MOP - Debug Logs (Fullscreen)")
+            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .block(Block::default().borders(Borders::ALL));
+        f.render_widget(title, title_area);
+
+        draw_log_pane(f, app, log_area);
+
+        let log_help = "l: cycle view | Esc: close | j/k: scroll | t/b: top/bottom | /: filter | s: save";
+        let help_paragraph = Paragraph::new(log_help)
+            .style(Style::default().fg(Color::Gray));
+        f.render_widget(help_paragraph, help_area);
     } else {
-        draw_main_content(f, app, content_area);
+        let constraints = if log_visible {
+            vec![
+                Constraint::Length(3),  // Title
+                Constraint::Percentage(65), // Main content
+                Constraint::Percentage(35), // Log pane
+                Constraint::Length(1),  // Help text
+            ]
+        } else {
+            vec![
+                Constraint::Length(3),  // Title
+                Constraint::Min(1),     // Main content
+                Constraint::Length(1),  // Help text
+            ]
+        };
+
+        let areas = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(constraints)
+            .split(f.area());
+
+        let title_area = areas[0];
+        let content_area = areas[1];
+        let (log_area, help_area) = if log_visible {
+            (Some(areas[2]), areas[3])
+        } else {
+            (None, areas[2])
+        };
+
+        // Title
+        let title = Paragraph::new("MOP - UPnP Device Explorer")
+            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .block(Block::default().borders(Borders::ALL));
+        f.render_widget(title, title_area);
+
+        // Main content area - split horizontally if we have errors
+        if has_errors {
+            let [main_area, error_area] = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(70),
+                    Constraint::Percentage(30),
+                ])
+                .split(content_area)[..] else { return };
+
+            draw_main_content(f, app, main_area);
+            draw_error_panel(f, app, error_area);
+        } else {
+            draw_main_content(f, app, content_area);
+        }
+
+        // Log pane
+        if let Some(log_area) = log_area {
+            draw_log_pane(f, app, log_area);
+        }
+
+        // Help text
+        let final_help = if log_visible {
+            format!("{} | l: cycle view | Esc: close logs", help_text)
+        } else {
+            help_text
+        };
+        let help_paragraph = Paragraph::new(final_help)
+            .style(Style::default().fg(Color::Gray));
+        f.render_widget(help_paragraph, help_area);
     }
-    
-    // Draw help text at the bottom
-    let help_paragraph = Paragraph::new(help_text)
-        .style(Style::default().fg(Color::Gray));
-    f.render_widget(help_paragraph, help_area);
 
     // Draw help modal if shown
     if app.show_help {
         draw_help_modal(f);
     }
-    
+
     // Draw config modal if shown
     if app.show_config {
         draw_config_modal(f, app);
@@ -613,4 +672,123 @@ fn draw_config_modal(f: &mut Frame, app: &App) {
             input_line.y + 1,
         ));
     }
+}
+
+fn draw_log_pane(f: &mut Frame, app: &mut App, area: Rect) {
+    let logs = app.get_filtered_logs();
+    let total_logs = if let Ok(buffer) = app.log_buffer.lock() {
+        buffer.len()
+    } else {
+        0
+    };
+
+    // Calculate visible area (minus borders and footer)
+    let visible_height = area.height.saturating_sub(4) as usize; // borders + footer line
+
+    // Clamp scroll offset
+    let max_scroll = logs.len().saturating_sub(visible_height);
+    if app.log_auto_scroll || app.log_scroll_offset > max_scroll {
+        app.log_scroll_offset = max_scroll;
+    }
+
+    let visible_logs: Vec<&LogEntry> = logs
+        .iter()
+        .skip(app.log_scroll_offset)
+        .take(visible_height)
+        .collect();
+
+    // Split into log content and footer
+    let [log_content_area, footer_area] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(1),
+            Constraint::Length(2),
+        ])
+        .split(area)[..] else { return };
+
+    // Render log entries
+    let log_lines: Vec<Line> = visible_logs
+        .iter()
+        .map(|entry| {
+            let time_span = Span::styled(
+                entry.timestamp.format("%H:%M:%S ").to_string(),
+                Style::default().fg(Color::DarkGray),
+            );
+
+            let category_color = match entry.category {
+                LogCategory::Net => Color::Cyan,
+                LogCategory::Disc => Color::Green,
+                LogCategory::Soap => Color::Magenta,
+                LogCategory::Http => Color::Blue,
+                LogCategory::Xml => Color::Yellow,
+                LogCategory::App => Color::White,
+            };
+
+            let (msg_style, cat_style) = match entry.severity {
+                LogSeverity::Error => (
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
+                LogSeverity::Warn => (
+                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(Color::Yellow),
+                ),
+                LogSeverity::Info => (
+                    Style::default(),
+                    Style::default().fg(category_color),
+                ),
+                LogSeverity::Debug => (
+                    Style::default().add_modifier(Modifier::DIM),
+                    Style::default().fg(category_color).add_modifier(Modifier::DIM),
+                ),
+                LogSeverity::Trace => (
+                    Style::default().add_modifier(Modifier::DIM).add_modifier(Modifier::ITALIC),
+                    Style::default().fg(category_color).add_modifier(Modifier::DIM),
+                ),
+            };
+
+            let category_span = Span::styled(
+                format!("[{}] ", entry.category.as_str()),
+                cat_style,
+            );
+
+            let message_span = Span::styled(&entry.message, msg_style);
+
+            Line::from(vec![time_span, category_span, message_span])
+        })
+        .collect();
+
+    let title = if !app.log_filter.is_empty() {
+        format!("Logs (showing {} of {})", logs.len(), total_logs)
+    } else {
+        format!("Logs ({} entries)", logs.len())
+    };
+
+    let log_widget = Paragraph::new(log_lines)
+        .block(Block::default().borders(Borders::ALL).title(title));
+    f.render_widget(log_widget, log_content_area);
+
+    // Footer with filter
+    let footer_content = if app.log_filter_active {
+        vec![
+            Span::styled("Filter: ", Style::default().fg(Color::Cyan)),
+            Span::raw(&app.log_filter_input),
+            Span::styled("█", Style::default().fg(Color::White)),
+        ]
+    } else if !app.log_filter.is_empty() {
+        vec![
+            Span::styled("Filter: ", Style::default().fg(Color::Cyan)),
+            Span::styled(&app.log_filter, Style::default().fg(Color::Yellow)),
+            Span::raw("  "),
+            Span::styled("[/]filter  [s]ave", Style::default().fg(Color::DarkGray)),
+        ]
+    } else {
+        vec![
+            Span::styled("[/]filter  [s]ave  [t]op  [b]ottom", Style::default().fg(Color::DarkGray)),
+        ]
+    };
+
+    let footer = Paragraph::new(Line::from(footer_content))
+        .block(Block::default().borders(Borders::TOP));
+    f.render_widget(footer, footer_area);
 }

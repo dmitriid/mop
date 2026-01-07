@@ -31,8 +31,10 @@ impl std::fmt::Display for NetworkError {
 impl std::error::Error for NetworkError {}
 
 pub fn enumerate_network_interfaces() -> Result<Vec<NetworkInterface>, NetworkError> {
+    log::debug!(target: "mop::net", "Enumerating network interfaces");
     let interfaces = get_if_addrs()
         .map_err(|e| NetworkError::EnumerationFailed(format!("System error: {}", e)))?;
+    log::debug!(target: "mop::net", "Found {} raw interfaces", interfaces.len());
     
     let mut result = Vec::new();
     let mut seen_ips = HashMap::new();
@@ -58,6 +60,8 @@ pub fn enumerate_network_interfaces() -> Result<Vec<NetworkInterface>, NetworkEr
                                     !ip.is_multicast() &&
                                     v4_addr.broadcast.is_some();
             
+            log::info!(target: "mop::net", "Found interface {} ({}) multicast={}",
+                interface.name, ip, supports_multicast);
             result.push(NetworkInterface {
                 name: interface.name,
                 ip,
@@ -67,7 +71,7 @@ pub fn enumerate_network_interfaces() -> Result<Vec<NetworkInterface>, NetworkEr
             });
         }
     }
-    
+
     // If no non-loopback interfaces found, include loopback
     if result.is_empty() {
         for interface in get_if_addrs().map_err(|e| NetworkError::EnumerationFailed(format!("System error: {}", e)))? {
@@ -99,7 +103,8 @@ pub fn enumerate_network_interfaces() -> Result<Vec<NetworkInterface>, NetworkEr
             _ => a.ip.cmp(&b.ip),
         }
     });
-    
+
+    log::info!(target: "mop::net", "Enumerated {} valid network interfaces", result.len());
     Ok(result)
 }
 
@@ -117,14 +122,23 @@ pub fn get_primary_interface() -> Result<NetworkInterface, NetworkError> {
 }
 
 pub fn test_interface_multicast(interface: &NetworkInterface) -> bool {
+    log::debug!(target: "mop::net", "Testing multicast capability for {}", interface.name);
     if interface.is_loopback || !interface.supports_multicast {
+        log::debug!(target: "mop::net", "Interface {} skipped: loopback={} multicast={}",
+            interface.name, interface.is_loopback, interface.supports_multicast);
         return false;
     }
-    
+
     // Use the raw SSDP test function to verify multicast capability
     match crate::upnp_ssdp::test_multicast_capability() {
-        Ok(_) => true,
-        Err(_) => false,
+        Ok(_) => {
+            log::info!(target: "mop::net", "Multicast test passed for {}", interface.name);
+            true
+        }
+        Err(e) => {
+            log::warn!(target: "mop::net", "Multicast test failed for {}: {:?}", interface.name, e);
+            false
+        }
     }
 }
 

@@ -39,18 +39,57 @@ pub fn start_discovery() -> Receiver<DiscoveryMessage> {
 }
 
 async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
-    log::info!(target: "mop::upnp", "Starting UPnP discovery (rupnp)");
+    log::info!(target: "mop::upnp", "Starting UPnP discovery (rupnp + port scan in parallel)");
     let mut devices = Vec::new();
 
-    // Search for all UPnP root devices using the new API
+    // Run SSDP discovery and port scan in PARALLEL
+    let ssdp_sender = sender.clone();
+    let port_scan_sender = sender.clone();
+
+    let (ssdp_result, port_scan_result) = tokio::join!(
+        ssdp_discovery(ssdp_sender),
+        targeted_port_scan_parallel(port_scan_sender)
+    );
+
+    // Collect SSDP devices
+    if let Ok(ssdp_devices) = ssdp_result {
+        for device in ssdp_devices {
+            if !devices.iter().any(|d: &UpnpDevice| d.location == device.location) {
+                devices.push(device);
+            }
+        }
+    }
+
+    sender.send(DiscoveryMessage::Phase1Complete).ok();
+    sender.send(DiscoveryMessage::Phase2Complete).ok();
+
+    // Collect port scan devices
+    if let Ok(scan_devices) = port_scan_result {
+        log::info!(target: "mop::upnp", "Port scan found {} devices", scan_devices.len());
+        for device in scan_devices {
+            if !devices.iter().any(|d| d.location == device.location && d.base_url == device.base_url) {
+                sender.send(DiscoveryMessage::DeviceFound(device.clone())).ok();
+                devices.push(device);
+            }
+        }
+    }
+
+    log::info!(target: "mop::upnp", "Discovery complete: {} total devices", devices.len());
+    sender.send(DiscoveryMessage::Phase3Complete).ok();
+    sender.send(DiscoveryMessage::AllComplete(devices)).ok();
+}
+
+async fn ssdp_discovery(sender: Sender<DiscoveryMessage>) -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut devices = Vec::new();
+
     match rupnp::discover(&SearchTarget::RootDevice, Duration::from_secs(5), None).await {
         Ok(device_stream) => {
             use futures_util::StreamExt;
-            log::debug!(target: "mop::upnp", "rupnp discovery stream started, timeout=5s");
+            log::debug!(target: "mop::upnp", "SSDP discovery started, timeout=5s");
 
             let mut stream = Box::pin(device_stream);
             let mut device_count = 0;
-            
+
             while let Some(device_result) = stream.next().await {
                 if let Ok(device) = device_result {
                     device_count += 1;
@@ -58,13 +97,9 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
                     let device_url = device.url().to_string();
                     let device_type = device.device_type().to_string();
                     let friendly_name = device.friendly_name().to_string();
-                    log::info!(target: "mop::upnp", "Found device #{}: {} ({})", device_count, friendly_name, device_url);
-                    
-                    
-                    // Special handling for Plex servers
-                    let base_url = if friendly_name.to_lowercase().contains("plex") || 
-                                      device_type.contains("plex") {
-                        // For Plex, try to construct the correct URL with port 32400
+                    log::info!(target: "mop::upnp", "SSDP found: {} ({})", friendly_name, device_url);
+
+                    let base_url = if friendly_name.to_lowercase().contains("plex") || device_type.contains("plex") {
                         if let Ok(url) = url::Url::parse(&device_url) {
                             if let Some(host) = url.host_str() {
                                 format!("http://{}:32400", host)
@@ -77,22 +112,12 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
                     } else {
                         extract_base_url(&device_url)
                     };
-                    
-                    // Fetch device description to get real service URLs
+
                     let content_directory_url = match fetch_device_description(&device_url).await {
-                        Ok(desc) => {
-                            let url = parse_content_directory_url(&desc, &device_url);
-                            if let Some(ref u) = url {
-                                log::debug!(target: "mop::upnp", "ContentDirectory URL for {}: {}", friendly_name, u);
-                            }
-                            url
-                        }
-                        Err(e) => {
-                            log::warn!(target: "mop::upnp", "Failed to fetch device description for {}: {}", friendly_name, e);
-                            None
-                        }
+                        Ok(desc) => parse_content_directory_url(&desc, &device_url),
+                        Err(_) => None,
                     };
-                    
+
                     let upnp_device = UpnpDevice {
                         name: format!("{} [{}]", friendly_name, device_type),
                         location: device_url,
@@ -100,99 +125,161 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
                         device_client: Some(device_type),
                         content_directory_url,
                     };
-                    
-                    
+
                     sender.send(DiscoveryMessage::DeviceFound(upnp_device.clone())).ok();
                     devices.push(upnp_device);
-                    
+
                     if device_count >= 20 {
-                        break; // Limit to prevent hanging
+                        break;
                     }
                 }
             }
         }
         Err(e) => {
-            log::error!(target: "mop::upnp", "UPnP discovery failed: {}", e);
-            sender.send(DiscoveryMessage::Error(format!("UPnP discovery failed: {}", e))).ok();
+            log::error!(target: "mop::upnp", "SSDP discovery failed: {}", e);
         }
     }
 
-    log::info!(target: "mop::upnp", "Phase 1 complete: found {} devices", devices.len());
-    sender.send(DiscoveryMessage::Phase1Complete).ok();
-    
-    // Note: rupnp 3.0 discovery already finds all devices including media servers
-    log::debug!(target: "mop::upnp", "Phase 2 complete (extended discovery)");
-    sender.send(DiscoveryMessage::Phase2Complete).ok();
-
-    // Try port scanning as fallback
-    log::debug!(target: "mop::upnp", "Starting port scan fallback");
-    match targeted_port_scan().await {
-        Ok(scan_devices) => {
-            log::info!(target: "mop::upnp", "Port scan found {} additional devices", scan_devices.len());
-            for device in scan_devices {
-                if !devices.iter().any(|d| d.location == device.location) {
-                    sender.send(DiscoveryMessage::DeviceFound(device.clone())).ok();
-                    devices.push(device);
-                }
-            }
-        }
-        Err(e) => {
-            log::warn!(target: "mop::upnp", "Port scan failed: {}", e);
-            sender.send(DiscoveryMessage::Error(format!("Port scan failed: {}", e))).ok();
-        }
-    }
-
-    log::info!(target: "mop::upnp", "Discovery complete: {} total devices", devices.len());
-    sender.send(DiscoveryMessage::Phase3Complete).ok();
-    sender.send(DiscoveryMessage::AllComplete(devices)).ok();
+    Ok(devices)
 }
 
-async fn targeted_port_scan() -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error>> {
-    let mut devices = Vec::new();
-    
-    // Get local network range
+async fn targeted_port_scan_parallel(sender: Sender<DiscoveryMessage>) -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error + Send + Sync>> {
+    log::debug!(target: "mop::upnp", "Starting parallel port scan");
+
     let network_base = match get_local_network() {
-        Some(base) => base,
-        None => return Ok(devices), // Return empty instead of error
+        Some(base) => {
+            log::debug!(target: "mop::upnp", "Port scan using network {}.x", base);
+            base
+        }
+        None => return Ok(Vec::new()),
     };
-    
-    // Scan promising IPs and ports
-    let promising_ips = vec![1, 2, 10, 100, 200];
-    let media_ports = vec![32400, 8096, 8920]; // Plex, Jellyfin, Emby
-    
-    for ip_suffix in promising_ips {
+
+    let promising_ips = vec![21, 1, 2, 10, 20, 50, 100, 150, 200, 254];
+    let media_ports = vec![32469, 32400, 8096, 8920];
+
+    // Create all scan tasks
+    log::info!(target: "mop::upnp", "Port scan: scanning {} IPs × {} ports = {} endpoints",
+        promising_ips.len(), media_ports.len(), promising_ips.len() * media_ports.len());
+
+    let mut tasks = Vec::new();
+    for ip_suffix in &promising_ips {
         let ip = format!("{}.{}", network_base, ip_suffix);
         for &port in &media_ports {
-            if let Some(device) = scan_single_endpoint(&ip, port).await {
+            log::debug!(target: "mop::upnp", "Queuing scan: {}:{}", ip, port);
+            let ip_clone = ip.clone();
+            tasks.push(tokio::spawn(async move {
+                let result = scan_single_endpoint(&ip_clone, port).await;
+                if result.is_some() {
+                    log::debug!(target: "mop::upnp", "Scan hit: {}:{}", ip_clone, port);
+                }
+                result
+            }));
+        }
+    }
+
+    // Run all scans in parallel and collect results
+    log::debug!(target: "mop::upnp", "Port scan: waiting for {} parallel scans", tasks.len());
+    let results = futures_util::future::join_all(tasks).await;
+    log::debug!(target: "mop::upnp", "Port scan: all scans complete");
+
+    let mut devices = Vec::new();
+    for result in results {
+        if let Ok(Some(device)) = result {
+            if !devices.iter().any(|d: &UpnpDevice| d.location == device.location) {
+                log::info!(target: "mop::upnp", "Port scan found: {}", device.name);
+                sender.send(DiscoveryMessage::DeviceFound(device.clone())).ok();
                 devices.push(device);
             }
         }
     }
-    
+
+    log::info!(target: "mop::upnp", "Port scan complete: {} devices found", devices.len());
+    Ok(devices)
+}
+
+async fn targeted_port_scan() -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error>> {
+    let mut devices = Vec::new();
+
+    // Get local network range
+    let network_base = match get_local_network() {
+        Some(base) => {
+            log::debug!(target: "mop::upnp", "Port scan using network range {}.x", base);
+            base
+        }
+        None => {
+            log::warn!(target: "mop::upnp", "Could not determine local network range");
+            return Ok(devices);
+        }
+    };
+
+    // Scan common IP suffixes for media server ports
+    // 21 first since that's a common Plex location
+    let promising_ips = vec![21, 1, 2, 10, 20, 50, 100, 150, 200, 254];
+    let media_ports = vec![32469, 32400, 8096, 8920]; // Plex DLNA, Plex Web, Jellyfin, Emby
+
+    for ip_suffix in promising_ips {
+        let ip = format!("{}.{}", network_base, ip_suffix);
+        for &port in &media_ports {
+            log::debug!(target: "mop::upnp", "Scanning {}:{}", ip, port);
+            if let Some(device) = scan_single_endpoint(&ip, port).await {
+                log::info!(target: "mop::upnp", "Port scan found device at {}:{}", ip, port);
+                devices.push(device);
+            }
+        }
+    }
+
     Ok(devices)
 }
 
 async fn scan_single_endpoint(ip: &str, port: u16) -> Option<UpnpDevice> {
     let url = format!("http://{}:{}", ip, port);
-    
+
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_millis(300))
+        .timeout(Duration::from_millis(500))
         .build()
         .ok()?;
-    
+
+    // For Plex DLNA port, try to get device description directly
+    if port == 32469 {
+        let desc_url = format!("{}/DeviceDescription.xml", url);
+        if let Ok(response) = client.get(&desc_url).send().await {
+            if response.status().is_success() {
+                if let Ok(desc_text) = response.text().await {
+                    // Parse device description for name and ContentDirectory URL
+                    let friendly_name = extract_xml_value(&desc_text, "friendlyName")
+                        .unwrap_or_else(|| format!("Plex DLNA ({})", ip));
+                    let content_dir_url = parse_content_directory_url(&desc_text, &desc_url);
+
+                    log::info!(target: "mop::upnp", "Found Plex DLNA at {}: {}", url, friendly_name);
+                    return Some(UpnpDevice {
+                        name: format!("{} [MediaServer:1]", friendly_name),
+                        location: desc_url,
+                        base_url: url,
+                        device_client: Some("Plex DLNA".to_string()),
+                        content_directory_url: content_dir_url,
+                    });
+                }
+            }
+        }
+        return None;
+    }
+
+    // For other ports, probe standard endpoints
     let endpoints = vec!["/", "/status", "/identity"];
-    
+
     for endpoint in endpoints {
         let test_url = format!("{}{}", url, endpoint);
         if let Ok(response) = client.get(&test_url).send().await {
-            if response.status().is_success() {
+            let status = response.status();
+            // Accept success OR 401 Unauthorized (Plex returns 401 when not authenticated)
+            if status.is_success() || status.as_u16() == 401 {
                 let server_name = match port {
                     32400 => format!("Plex Server ({}:{})", ip, port),
                     8096 => format!("Jellyfin Server ({}:{})", ip, port),
                     8920 => format!("Emby Server ({}:{})", ip, port),
                     _ => format!("Media Server ({}:{})", ip, port),
                 };
-                
+
                 return Some(UpnpDevice {
                     name: server_name,
                     location: url.clone(),
@@ -203,7 +290,19 @@ async fn scan_single_endpoint(ip: &str, port: u16) -> Option<UpnpDevice> {
             }
         }
     }
-    
+
+    None
+}
+
+fn extract_xml_value(xml: &str, tag: &str) -> Option<String> {
+    let open_tag = format!("<{}>", tag);
+    let close_tag = format!("</{}>", tag);
+    if let Some(start) = xml.find(&open_tag) {
+        let value_start = start + open_tag.len();
+        if let Some(end) = xml[value_start..].find(&close_tag) {
+            return Some(xml[value_start..value_start + end].to_string());
+        }
+    }
     None
 }
 
@@ -313,19 +412,30 @@ fn extract_base_url(device_url: &str) -> String {
 }
 
 fn get_local_network() -> Option<String> {
-    use std::net::{TcpStream, SocketAddr};
-    
-    if let Ok(stream) = TcpStream::connect("8.8.8.8:80") {
-        if let Ok(local_addr) = stream.local_addr() {
-            if let SocketAddr::V4(addr) = local_addr {
-                let ip = addr.ip().to_string();
-                let parts: Vec<&str> = ip.split('.').collect();
-                if parts.len() >= 3 {
-                    return Some(format!("{}.{}.{}", parts[0], parts[1], parts[2]));
+    // Get local IP from network interfaces directly
+    if let Ok(interfaces) = if_addrs::get_if_addrs() {
+        for iface in interfaces {
+            if let if_addrs::IfAddr::V4(v4) = iface.addr {
+                let ip = v4.ip;
+                // Skip loopback
+                if ip.is_loopback() {
+                    continue;
+                }
+                // Use first private IP found
+                let octets = ip.octets();
+                let is_private = matches!(octets[0], 10)
+                    || (octets[0] == 172 && (16..=31).contains(&octets[1]))
+                    || (octets[0] == 192 && octets[1] == 168);
+
+                if is_private {
+                    let network = format!("{}.{}.{}", octets[0], octets[1], octets[2]);
+                    log::debug!(target: "mop::upnp", "Local network from {}: {}.x", iface.name, network);
+                    return Some(network);
                 }
             }
         }
     }
+    log::warn!(target: "mop::upnp", "Could not determine local network");
     None
 }
 

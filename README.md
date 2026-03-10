@@ -1,6 +1,7 @@
 # What is it
 
-A purely vibe-coded TUI to browse UPnP services on the local network. Main use-case: using in [Omarchy](https://omarchy.org/).
+A purely vibe-coded TUI to browse UPnP services on the local network. Main use-case: using in [Omarchy](https://omarchy.org/) and then in [CachyOS](https://cachyos.org/).
+
 
 For some reason both Plex and VLC struggle with playing media from my home Plex server. MPV plays it just fine when provided a direct URL. So my biggest gripe was: not good way of quickly navigating to what I want and invoking `mpv <direct url to file on plex>`.
 
@@ -32,6 +33,32 @@ No binaries, sorry. You'll need to clone this repo and build it.
 - Install -> TUI
 - Put the path to your built binary (e.g. `/home/<username>/projects/mop/target/release/mop`)
 - Enjoy
+
+# To add it as a TUI app in KDE
+
+Create a `mop.sh` file:
+
+```sh
+#!/bin/bash
+cd "$(dirname "$0")"
+
+# replace alakritty with any terminal emulator, e.g. konsole
+alacritty --class mop-widget -o window.decorations=none -e ./target/release/mop "$@"
+```
+
+To make it appear in app list, create `.desktop` file in `~/.local/share/applications`:
+
+```toml
+[Desktop Entry]
+Name=MOP
+Comment=UPnP/Plex media browser
+Exec=<path/to/>mop.sh
+Icon=utilities-terminal
+Type=Application
+Categories=AudioVideo;Network;
+StartupWMClass=mop-widget
+Terminal=false
+```
 
 # Issues etc.
 

@@ -320,7 +320,7 @@ impl App {
                 let server = &self.servers[server_idx];
                 let (contents, error) = crate::upnp::browse_directory(server, &self.current_directory, &mut self.container_id_map);
                 self.directory_contents = contents;
-                self.last_error = error;
+                self.last_error = error.filter(|error| !error.trim().is_empty());
                 self.selected_item = if self.directory_contents.is_empty() { None } else { Some(0) };
             }
         }

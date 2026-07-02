@@ -1,7 +1,7 @@
 use crate::app::DirectoryItem;
+use rupnp::ssdp::{SearchTarget, URN};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
-use rupnp::ssdp::SearchTarget;
 
 #[derive(Debug, Clone)]
 pub struct UpnpDevice {
@@ -27,14 +27,14 @@ pub enum DiscoveryMessage {
 
 pub fn start_discovery() -> Receiver<DiscoveryMessage> {
     let (tx, rx) = mpsc::channel();
-    
+
     std::thread::spawn(move || {
         tx.send(DiscoveryMessage::Started).ok();
-        
+
         let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
         rt.block_on(discover_with_rupnp(tx));
     });
-    
+
     rx
 }
 
@@ -54,7 +54,10 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
     // Collect SSDP devices
     if let Ok(ssdp_devices) = ssdp_result {
         for device in ssdp_devices {
-            if !devices.iter().any(|d: &UpnpDevice| d.location == device.location) {
+            if !devices
+                .iter()
+                .any(|d: &UpnpDevice| d.location == device.location)
+            {
                 devices.push(device);
             }
         }
@@ -67,8 +70,13 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
     if let Ok(scan_devices) = port_scan_result {
         log::info!(target: "mop::upnp", "Port scan found {} devices", scan_devices.len());
         for device in scan_devices {
-            if !devices.iter().any(|d| d.location == device.location && d.base_url == device.base_url) {
-                sender.send(DiscoveryMessage::DeviceFound(device.clone())).ok();
+            if !devices
+                .iter()
+                .any(|d| is_same_discovered_device(d, &device))
+            {
+                sender
+                    .send(DiscoveryMessage::DeviceFound(device.clone()))
+                    .ok();
                 devices.push(device);
             }
         }
@@ -79,71 +87,95 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
     sender.send(DiscoveryMessage::AllComplete(devices)).ok();
 }
 
-async fn ssdp_discovery(sender: Sender<DiscoveryMessage>) -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error + Send + Sync>> {
+async fn ssdp_discovery(
+    sender: Sender<DiscoveryMessage>,
+) -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error + Send + Sync>> {
     let mut devices = Vec::new();
 
-    match rupnp::discover(&SearchTarget::RootDevice, Duration::from_secs(5), None).await {
-        Ok(device_stream) => {
-            use futures_util::StreamExt;
-            log::debug!(target: "mop::upnp", "SSDP discovery started, timeout=5s");
+    for search_target in ssdp_search_targets() {
+        log::debug!(target: "mop::upnp", "SSDP discovery started, target={}, timeout=5s", search_target);
 
-            let mut stream = Box::pin(device_stream);
-            let mut device_count = 0;
+        match rupnp::discover(&search_target, Duration::from_secs(5), None).await {
+            Ok(device_stream) => {
+                use futures_util::StreamExt;
 
-            while let Some(device_result) = stream.next().await {
-                if let Ok(device) = device_result {
-                    device_count += 1;
+                let mut stream = Box::pin(device_stream);
+                let mut device_count = 0;
 
-                    let device_url = device.url().to_string();
-                    let device_type = device.device_type().to_string();
-                    let friendly_name = device.friendly_name().to_string();
-                    log::info!(target: "mop::upnp", "SSDP found: {} ({})", friendly_name, device_url);
+                while let Some(device_result) = stream.next().await {
+                    if let Ok(device) = device_result {
+                        device_count += 1;
 
-                    let base_url = if friendly_name.to_lowercase().contains("plex") || device_type.contains("plex") {
-                        if let Ok(url) = url::Url::parse(&device_url) {
-                            if let Some(host) = url.host_str() {
-                                format!("http://{}:32400", host)
+                        let device_url = device.url().to_string();
+                        let device_type = device.device_type().to_string();
+                        let friendly_name = device.friendly_name().to_string();
+                        log::info!(target: "mop::upnp", "SSDP found: {} ({})", friendly_name, device_url);
+
+                        let base_url = if friendly_name.to_lowercase().contains("plex")
+                            || device_type.contains("plex")
+                        {
+                            if let Ok(url) = url::Url::parse(&device_url) {
+                                if let Some(host) = url.host_str() {
+                                    format!("http://{}:32400", host)
+                                } else {
+                                    extract_base_url(&device_url)
+                                }
                             } else {
                                 extract_base_url(&device_url)
                             }
                         } else {
                             extract_base_url(&device_url)
+                        };
+
+                        let content_directory_url =
+                            match fetch_device_description(&device_url).await {
+                                Ok(desc) => parse_content_directory_url(&desc, &device_url),
+                                Err(_) => None,
+                            };
+
+                        let upnp_device = UpnpDevice {
+                            name: format!("{} [{}]", friendly_name, device_type),
+                            location: device_url,
+                            base_url,
+                            device_client: Some(device_type),
+                            content_directory_url,
+                        };
+
+                        sender
+                            .send(DiscoveryMessage::DeviceFound(upnp_device.clone()))
+                            .ok();
+                        if !devices
+                            .iter()
+                            .any(|d: &UpnpDevice| d.location == upnp_device.location)
+                        {
+                            devices.push(upnp_device);
                         }
-                    } else {
-                        extract_base_url(&device_url)
-                    };
 
-                    let content_directory_url = match fetch_device_description(&device_url).await {
-                        Ok(desc) => parse_content_directory_url(&desc, &device_url),
-                        Err(_) => None,
-                    };
-
-                    let upnp_device = UpnpDevice {
-                        name: format!("{} [{}]", friendly_name, device_type),
-                        location: device_url,
-                        base_url,
-                        device_client: Some(device_type),
-                        content_directory_url,
-                    };
-
-                    sender.send(DiscoveryMessage::DeviceFound(upnp_device.clone())).ok();
-                    devices.push(upnp_device);
-
-                    if device_count >= 20 {
-                        break;
+                        if device_count >= 20 {
+                            break;
+                        }
                     }
                 }
             }
-        }
-        Err(e) => {
-            log::error!(target: "mop::upnp", "SSDP discovery failed: {}", e);
+            Err(e) => {
+                log::error!(target: "mop::upnp", "SSDP discovery failed for {}: {}", search_target, e);
+            }
         }
     }
 
     Ok(devices)
 }
 
-async fn targeted_port_scan_parallel(sender: Sender<DiscoveryMessage>) -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error + Send + Sync>> {
+fn ssdp_search_targets() -> Vec<SearchTarget> {
+    vec![
+        SearchTarget::RootDevice,
+        SearchTarget::URN(URN::device("schemas-upnp-org", "MediaServer", 1)),
+    ]
+}
+
+async fn targeted_port_scan_parallel(
+    _sender: Sender<DiscoveryMessage>,
+) -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error + Send + Sync>> {
     log::debug!(target: "mop::upnp", "Starting parallel port scan");
 
     let network_base = match get_local_network() {
@@ -154,7 +186,7 @@ async fn targeted_port_scan_parallel(sender: Sender<DiscoveryMessage>) -> Result
         None => return Ok(Vec::new()),
     };
 
-    let promising_ips = vec![21, 1, 2, 10, 20, 50, 100, 150, 200, 254];
+    let promising_ips = port_scan_host_suffixes();
     let media_ports = vec![32469, 32400, 8096, 8920];
 
     // Create all scan tasks
@@ -185,9 +217,11 @@ async fn targeted_port_scan_parallel(sender: Sender<DiscoveryMessage>) -> Result
     let mut devices = Vec::new();
     for result in results {
         if let Ok(Some(device)) = result {
-            if !devices.iter().any(|d: &UpnpDevice| d.location == device.location) {
+            if !devices
+                .iter()
+                .any(|d: &UpnpDevice| is_same_discovered_device(d, &device))
+            {
                 log::info!(target: "mop::upnp", "Port scan found: {}", device.name);
-                sender.send(DiscoveryMessage::DeviceFound(device.clone())).ok();
                 devices.push(device);
             }
         }
@@ -214,7 +248,7 @@ async fn targeted_port_scan() -> Result<Vec<UpnpDevice>, Box<dyn std::error::Err
 
     // Scan common IP suffixes for media server ports
     // 21 first since that's a common Plex location
-    let promising_ips = vec![21, 1, 2, 10, 20, 50, 100, 150, 200, 254];
+    let promising_ips = port_scan_host_suffixes();
     let media_ports = vec![32469, 32400, 8096, 8920]; // Plex DLNA, Plex Web, Jellyfin, Emby
 
     for ip_suffix in promising_ips {
@@ -249,12 +283,13 @@ async fn scan_single_endpoint(ip: &str, port: u16) -> Option<UpnpDevice> {
                     let friendly_name = extract_xml_value(&desc_text, "friendlyName")
                         .unwrap_or_else(|| format!("Plex DLNA ({})", ip));
                     let content_dir_url = parse_content_directory_url(&desc_text, &desc_url);
+                    let base_url = dlna_device_base_url(ip, &url, &friendly_name, &desc_text);
 
                     log::info!(target: "mop::upnp", "Found Plex DLNA at {}: {}", url, friendly_name);
                     return Some(UpnpDevice {
                         name: format!("{} [MediaServer:1]", friendly_name),
                         location: desc_url,
-                        base_url: url,
+                        base_url,
                         device_client: Some("Plex DLNA".to_string()),
                         content_directory_url: content_dir_url,
                     });
@@ -313,49 +348,52 @@ async fn fetch_device_description(device_url: &str) -> Result<String, Box<dyn st
         .timeout(Duration::from_secs(10))
         .send()
         .await?;
-    
+
     if !response.status().is_success() {
         return Err(format!("Failed to fetch device description: {}", response.status()).into());
     }
-    
+
     Ok(response.text().await?)
 }
 
 fn parse_content_directory_url(device_desc: &str, device_url: &str) -> Option<String> {
     use quick_xml::Reader;
     use quick_xml::events::Event;
-    
+
     let mut reader = Reader::from_str(device_desc);
     reader.config_mut().trim_text(true);
-    
+
     let mut buf = Vec::new();
     let mut in_service = false;
     let mut in_service_type = false;
     let mut in_control_url = false;
     let mut current_service_type = String::new();
     let mut current_control_url = String::new();
-    
+
     // Parse the device URL to get base URL for relative paths
     let base_url = if let Ok(url) = url::Url::parse(device_url) {
-        format!("{}://{}:{}", url.scheme(), url.host_str().unwrap_or(""), url.port().unwrap_or(80))
+        format!(
+            "{}://{}:{}",
+            url.scheme(),
+            url.host_str().unwrap_or(""),
+            url.port().unwrap_or(80)
+        )
     } else {
         return None;
     };
-    
+
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) => {
-                match e.name().as_ref() {
-                    b"service" => {
-                        in_service = true;
-                        current_service_type.clear();
-                        current_control_url.clear();
-                    }
-                    b"serviceType" => in_service_type = true,
-                    b"controlURL" => in_control_url = true,
-                    _ => {}
+            Ok(Event::Start(ref e)) => match e.name().as_ref() {
+                b"service" => {
+                    in_service = true;
+                    current_service_type.clear();
+                    current_control_url.clear();
                 }
-            }
+                b"serviceType" => in_service_type = true,
+                b"controlURL" => in_control_url = true,
+                _ => {}
+            },
             Ok(Event::Text(e)) => {
                 if in_service {
                     let text = e.unescape().unwrap_or_default().to_string();
@@ -369,7 +407,9 @@ fn parse_content_directory_url(device_desc: &str, device_url: &str) -> Option<St
             Ok(Event::End(ref e)) => {
                 match e.name().as_ref() {
                     b"service" => {
-                        if current_service_type.contains("ContentDirectory") && !current_control_url.is_empty() {
+                        if current_service_type.contains("ContentDirectory")
+                            && !current_control_url.is_empty()
+                        {
                             // Resolve relative URL
                             let full_url = if current_control_url.starts_with("http") {
                                 current_control_url
@@ -394,14 +434,16 @@ fn parse_content_directory_url(device_desc: &str, device_url: &str) -> Option<St
         }
         buf.clear();
     }
-    
+
     None
 }
 
 fn extract_base_url(device_url: &str) -> String {
     if let Ok(url) = url::Url::parse(device_url) {
         if let Some(host) = url.host_str() {
-            let port = url.port().unwrap_or(if url.scheme() == "https" { 443 } else { 80 });
+            let port = url
+                .port()
+                .unwrap_or(if url.scheme() == "https" { 443 } else { 80 });
             format!("{}://{}:{}", url.scheme(), host, port)
         } else {
             device_url.to_string()
@@ -439,16 +481,39 @@ fn get_local_network() -> Option<String> {
     None
 }
 
+fn port_scan_host_suffixes() -> Vec<u8> {
+    (1..=254).collect()
+}
+
+fn is_same_discovered_device(left: &UpnpDevice, right: &UpnpDevice) -> bool {
+    left.location == right.location || left.base_url == right.base_url
+}
+
+fn dlna_device_base_url(
+    ip: &str,
+    dlna_url: &str,
+    friendly_name: &str,
+    device_description: &str,
+) -> String {
+    if friendly_name.to_lowercase().contains("plex")
+        || device_description.to_lowercase().contains("plex")
+    {
+        format!("http://{}:32400", ip)
+    } else {
+        dlna_url.to_string()
+    }
+}
+
 // Public API functions - simplified blocking version
 pub fn discover_plex_servers() -> (Vec<PlexServer>, Vec<String>) {
     let receiver = start_discovery();
-    
+
     let mut devices = Vec::new();
     let mut errors = Vec::new();
-    
+
     let timeout_duration = Duration::from_secs(10);
     let start = std::time::Instant::now();
-    
+
     while start.elapsed() < timeout_duration {
         match receiver.try_recv() {
             Ok(message) => match message {
@@ -462,28 +527,36 @@ pub fn discover_plex_servers() -> (Vec<PlexServer>, Vec<String>) {
                     errors.push(e);
                 }
                 _ => {} // Ignore intermediate phase completions
-            }
+            },
             Err(std::sync::mpsc::TryRecvError::Empty) => {
                 std::thread::sleep(Duration::from_millis(50));
             }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
         }
     }
-    
+
     if devices.is_empty() && errors.is_empty() {
         errors.push("Discovery timed out".to_string());
     }
-    
+
     (devices, errors)
 }
 
 // Directory browsing implementation
-pub fn browse_directory(server: &PlexServer, path: &[String], container_id_map: &mut std::collections::HashMap<Vec<String>, String>) -> (Vec<DirectoryItem>, Option<String>) {
+pub fn browse_directory(
+    server: &PlexServer,
+    path: &[String],
+    container_id_map: &mut std::collections::HashMap<Vec<String>, String>,
+) -> (Vec<DirectoryItem>, Option<String>) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async_browse_directory(server, path, container_id_map))
 }
 
-async fn async_browse_directory(server: &PlexServer, path: &[String], container_id_map: &mut std::collections::HashMap<Vec<String>, String>) -> (Vec<DirectoryItem>, Option<String>) {
+async fn async_browse_directory(
+    server: &PlexServer,
+    path: &[String],
+    container_id_map: &mut std::collections::HashMap<Vec<String>, String>,
+) -> (Vec<DirectoryItem>, Option<String>) {
     log::debug!(target: "mop::upnp", "Browsing directory: /{}", path.join("/"));
     let mut items = Vec::new();
     let mut errors = Vec::new();
@@ -499,7 +572,7 @@ async fn async_browse_directory(server: &PlexServer, path: &[String], container_
             // If not found, try to find it by traversing the path step by step
             let mut current_path = Vec::new();
             let mut current_id = "0".to_string();
-            
+
             for segment in path {
                 current_path.push(segment.clone());
                 if let Some(id) = container_id_map.get(&current_path) {
@@ -514,7 +587,7 @@ async fn async_browse_directory(server: &PlexServer, path: &[String], container_
             current_id
         }
     };
-    
+
     // Always use UPnP ContentDirectory service
     if let Some(content_dir_url) = &server.content_directory_url {
         log::debug!(target: "mop::soap", "SOAP Browse request to {} for container {}", content_dir_url, container_id);
@@ -528,7 +601,7 @@ async fn async_browse_directory(server: &PlexServer, path: &[String], container_
                     new_path.push(title.clone());
                     container_id_map.insert(new_path, container_id.clone());
                 }
-                
+
                 for item in upnp_items {
                     items.push(DirectoryItem {
                         name: item.title,
@@ -559,27 +632,20 @@ async fn async_browse_directory(server: &PlexServer, path: &[String], container_
         errors.push(error_msg);
     }
 
-    // Try HTTP fallback only if UPnP fails
-    match browse_http_directory(&server.base_url, path).await {
-        Ok(http_items) => {
-            items.extend(http_items);
-            (items, if errors.is_empty() { None } else { Some(errors.join("; ")) })
-        }
-        Err(e) => {
-            let error_msg = format!("HTTP browsing failed: {}", e);
-            errors.push(error_msg);
-            (items, Some(errors.join("; ")))
-        }
-    }
+    let error = errors
+        .into_iter()
+        .filter(|error| !error.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("; ");
+    (items, if error.is_empty() { None } else { Some(error) })
 }
-
 
 fn format_duration(milliseconds: u64) -> String {
     let seconds = milliseconds / 1000;
     let hours = seconds / 3600;
     let minutes = (seconds % 3600) / 60;
     let secs = seconds % 60;
-    
+
     if hours > 0 {
         format!("{}:{:02}:{:02}", hours, minutes, secs)
     } else {
@@ -598,12 +664,14 @@ struct UpnpItem {
     format: Option<String>,
 }
 
-async fn browse_upnp_content_directory_with_id(content_dir_url: &str, container_id: &str) -> Result<(Vec<UpnpItem>, Vec<(String, String)>), Box<dyn std::error::Error>> {
-    
+async fn browse_upnp_content_directory_with_id(
+    content_dir_url: &str,
+    container_id: &str,
+) -> Result<(Vec<UpnpItem>, Vec<(String, String)>), Box<dyn std::error::Error>> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()?;
-    
+
     // SOAP request for UPnP ContentDirectory Browse action
     let soap_action = "urn:schemas-upnp-org:service:ContentDirectory:1#Browse";
     let soap_body = format!(
@@ -622,8 +690,7 @@ async fn browse_upnp_content_directory_with_id(content_dir_url: &str, container_
 </s:Envelope>"#,
         container_id
     );
-    
-    
+
     let response = client
         .post(content_dir_url)
         .header("Content-Type", "text/xml; charset=utf-8")
@@ -632,34 +699,36 @@ async fn browse_upnp_content_directory_with_id(content_dir_url: &str, container_
         .body(soap_body)
         .send()
         .await?;
-    
+
     let status = response.status();
-    
+
     if !status.is_success() {
         let error_text = response.text().await.unwrap_or_default();
         return Err(format!("UPnP SOAP request failed with status: {}", status).into());
     }
-    
+
     let response_text = response.text().await?;
-    
+
     // Check for SOAP faults
     if response_text.contains("soap:Fault") || response_text.contains("SOAP-ENV:Fault") {
         return Err(format!("UPnP SOAP fault in response: {}", response_text).into());
     }
-    
+
     parse_didl_response(&response_text)
 }
 
-async fn browse_upnp_content_directory(content_dir_url: &str, path: &[String]) -> Result<Vec<UpnpItem>, Box<dyn std::error::Error>> {
+async fn browse_upnp_content_directory(
+    content_dir_url: &str,
+    path: &[String],
+) -> Result<Vec<UpnpItem>, Box<dyn std::error::Error>> {
     // For now, always use root container ID
     // This is a temporary fix - proper implementation would track container IDs
     let container_id = "0";
-    
-    
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()?;
-    
+
     // SOAP request for UPnP ContentDirectory Browse action
     let soap_action = "urn:schemas-upnp-org:service:ContentDirectory:1#Browse";
     let soap_body = format!(
@@ -678,8 +747,7 @@ async fn browse_upnp_content_directory(content_dir_url: &str, path: &[String]) -
 </s:Envelope>"#,
         container_id
     );
-    
-    
+
     let response = client
         .post(content_dir_url)
         .header("Content-Type", "text/xml; charset=utf-8")
@@ -688,142 +756,35 @@ async fn browse_upnp_content_directory(content_dir_url: &str, path: &[String]) -
         .body(soap_body)
         .send()
         .await?;
-    
+
     let status = response.status();
-    
+
     if !status.is_success() {
         let error_text = response.text().await.unwrap_or_default();
         return Err(format!("UPnP SOAP request failed with status: {}", status).into());
     }
-    
+
     let response_text = response.text().await?;
-    
+
     // Check for SOAP faults
     if response_text.contains("soap:Fault") || response_text.contains("SOAP-ENV:Fault") {
         return Err(format!("UPnP SOAP fault in response: {}", response_text).into());
     }
-    
+
     let (items, _) = parse_didl_response(&response_text)?;
-    Ok(items)
-}
-
-async fn browse_http_directory(base_url: &str, path: &[String]) -> Result<Vec<DirectoryItem>, Box<dyn std::error::Error>> {
-    let mut items = Vec::new();
-    let client = reqwest::Client::new();
-    
-    // Try common media server endpoints
-    let endpoints: Vec<String> = if path.is_empty() {
-        vec![
-            "/library/sections".to_string(),      // Plex
-            "/web/index.html".to_string(),        // Plex web
-            "/Users".to_string(),                 // Jellyfin/Emby users
-            "/Items".to_string(),                 // Jellyfin/Emby items
-            "/".to_string(),                      // Root directory
-        ]
-    } else {
-        vec![format!("/{}", path.join("/"))]
-    };
-    
-    for endpoint in endpoints {
-        let url = format!("{}{}", base_url, endpoint);
-        
-        if let Ok(response) = client.get(&url).send().await {
-            if response.status().is_success() {
-                if let Ok(text) = response.text().await {
-                    // Try to parse as JSON (modern media servers)
-                    if let Ok(json_items) = parse_json_directory(&text) {
-                        items.extend(json_items);
-                        break;
-                    }
-                    
-                    // Try to parse as HTML directory listing
-                    if let Ok(html_items) = parse_html_directory(&text, &url) {
-                        items.extend(html_items);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    
-    if items.is_empty() {
-        return Err("No browsable content found".into());
-    }
-    
-    Ok(items)
-}
-
-fn parse_json_directory(json_text: &str) -> Result<Vec<DirectoryItem>, Box<dyn std::error::Error>> {
-    // Try to parse common JSON structures from media servers
-    let mut items = Vec::new();
-    
-    // Simple JSON parsing for basic structures
-    if json_text.contains("\"MediaContainer\"") {
-        // Plex-style response
-        items.push(DirectoryItem {
-            name: "Plex Media Server".to_string(),
-            is_directory: true,
-            url: None,
-            metadata: None,
-        });
-    } else if json_text.contains("\"Items\"") {
-        // Jellyfin/Emby-style response  
-        items.push(DirectoryItem {
-            name: "Media Library".to_string(),
-            is_directory: true,
-            url: None,
-            metadata: None,
-        });
-    }
-    
-    Ok(items)
-}
-
-fn parse_html_directory(html_text: &str, base_url: &str) -> Result<Vec<DirectoryItem>, Box<dyn std::error::Error>> {
-    let mut items = Vec::new();
-    
-    // Simple HTML parsing for directory listings
-    for line in html_text.lines() {
-        if line.contains("<a href=") && !line.contains("Parent Directory") {
-            if let Some(start) = line.find("href=\"") {
-                if let Some(end) = line[start + 6..].find("\"") {
-                    let href = &line[start + 6..start + 6 + end];
-                    
-                    // Extract filename from href
-                    let name = href.trim_start_matches('/').trim_end_matches('/');
-                    if !name.is_empty() && name != ".." {
-                        let is_directory = href.ends_with('/');
-                        let full_url = if href.starts_with("http") {
-                            href.to_string()
-                        } else {
-                            format!("{}/{}", base_url.trim_end_matches('/'), href.trim_start_matches('/'))
-                        };
-                        
-                        items.push(DirectoryItem {
-                            name: name.to_string(),
-                            is_directory,
-                            url: if is_directory { None } else { Some(full_url) },
-                            metadata: None,
-                        });
-                    }
-                }
-            }
-        }
-    }
-    
     Ok(items)
 }
 
 fn extract_didl_from_soap(soap_xml: &str) -> Result<String, Box<dyn std::error::Error>> {
     use quick_xml::Reader;
     use quick_xml::events::Event;
-    
+
     let mut reader = Reader::from_str(soap_xml);
     reader.config_mut().trim_text(true);
-    
+
     let mut buf = Vec::new();
     let mut in_result = false;
-    
+
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => {
@@ -849,71 +810,70 @@ fn extract_didl_from_soap(soap_xml: &str) -> Result<String, Box<dyn std::error::
         }
         buf.clear();
     }
-    
+
     Err("No Result element found in SOAP response".into())
 }
 
-fn parse_didl_response(xml: &str) -> Result<(Vec<UpnpItem>, Vec<(String, String)>), Box<dyn std::error::Error>> {
+fn parse_didl_response(
+    xml: &str,
+) -> Result<(Vec<UpnpItem>, Vec<(String, String)>), Box<dyn std::error::Error>> {
     use quick_xml::Reader;
     use quick_xml::events::Event;
-    
+
     // First, extract the DIDL-Lite XML from the SOAP response
     let didl_xml = extract_didl_from_soap(xml)?;
-    
+
     let mut items = Vec::new();
     let mut container_mappings = Vec::new(); // (title, container_id)
     let mut reader = Reader::from_str(&didl_xml);
     reader.config_mut().trim_text(true);
-    
+
     let mut buf = Vec::new();
     let mut current_item: Option<UpnpItem> = None;
     let mut in_title = false;
     let mut in_resource = false;
     let mut current_title = String::new();
-    
+
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) => {
-                match e.name().as_ref() {
-                    b"container" => {
-                        let id = get_attribute_value(e, b"id").unwrap_or_default();
-                        current_item = Some(UpnpItem {
-                            id: id.clone(),
-                            title: String::new(),
-                            is_container: true,
-                            resource_url: None,
-                            size: None,
-                            duration: None,
-                            format: None,
-                        });
-                        current_title.clear();
-                    }
-                    b"item" => {
-                        let id = get_attribute_value(e, b"id").unwrap_or_default();
-                        current_item = Some(UpnpItem {
-                            id,
-                            title: String::new(),
-                            is_container: false,
-                            resource_url: None,
-                            size: None,
-                            duration: None,
-                            format: None,
-                        });
-                    }
-                    b"dc:title" => in_title = true,
-                    b"res" => {
-                        in_resource = true;
-                        if let Some(ref mut item) = current_item {
-                            item.size = get_attribute_value(e, b"size")
-                                .and_then(|s| s.parse().ok());
-                            item.duration = get_attribute_value(e, b"duration");
-                            item.format = get_attribute_value(e, b"protocolInfo")
-                                .and_then(|p| p.split(':').nth(2).map(|s| s.to_string()));
-                        }
-                    }
-                    _ => {}
+            Ok(Event::Start(ref e)) => match e.name().as_ref() {
+                b"container" => {
+                    let id = get_attribute_value(e, b"id").unwrap_or_default();
+                    current_item = Some(UpnpItem {
+                        id: id.clone(),
+                        title: String::new(),
+                        is_container: true,
+                        resource_url: None,
+                        size: None,
+                        duration: None,
+                        format: None,
+                    });
+                    current_title.clear();
                 }
-            }
+                b"item" => {
+                    let id = get_attribute_value(e, b"id").unwrap_or_default();
+                    current_item = Some(UpnpItem {
+                        id,
+                        title: String::new(),
+                        is_container: false,
+                        resource_url: None,
+                        size: None,
+                        duration: None,
+                        format: None,
+                    });
+                }
+                b"dc:title" => in_title = true,
+                b"res" => {
+                    in_resource = true;
+                    if let Some(ref mut item) = current_item {
+                        item.size = get_attribute_value(e, b"size").and_then(|s| s.parse().ok());
+                        item.duration = get_attribute_value(e, b"duration");
+                        item.format = get_attribute_value(e, b"protocolInfo")
+                            .and_then(|p| p.split(':').nth(2).map(|s| s.to_string()));
+                    }
+                }
+                _ => {}
+            },
             Ok(Event::Text(e)) => {
                 if in_title {
                     current_title = e.unescape().unwrap_or_default().to_string();
@@ -923,6 +883,19 @@ fn parse_didl_response(xml: &str) -> Result<(Vec<UpnpItem>, Vec<(String, String)
                 } else if in_resource {
                     if let Some(ref mut item) = current_item {
                         item.resource_url = Some(e.unescape().unwrap_or_default().to_string());
+                    }
+                }
+            }
+            Ok(Event::CData(e)) => {
+                let text = String::from_utf8_lossy(e.as_ref()).to_string();
+                if in_title {
+                    current_title = text;
+                    if let Some(ref mut item) = current_item {
+                        item.title = current_title.clone();
+                    }
+                } else if in_resource {
+                    if let Some(ref mut item) = current_item {
+                        item.resource_url = Some(text);
                     }
                 }
             }
@@ -953,19 +926,120 @@ fn parse_didl_response(xml: &str) -> Result<(Vec<UpnpItem>, Vec<(String, String)
         }
         buf.clear();
     }
-    
+
     Ok((items, container_mappings))
 }
 
-fn get_attribute_value(element: &quick_xml::events::BytesStart, attr_name: &[u8]) -> Option<String> {
-    element
-        .attributes()
-        .find_map(|a| {
-            if let Ok(attr) = a {
-                if attr.key.as_ref() == attr_name {
-                    return Some(String::from_utf8_lossy(&attr.value).to_string());
-                }
+fn get_attribute_value(
+    element: &quick_xml::events::BytesStart,
+    attr_name: &[u8],
+) -> Option<String> {
+    element.attributes().find_map(|a| {
+        if let Ok(attr) = a {
+            if attr.key.as_ref() == attr_name {
+                return Some(String::from_utf8_lossy(&attr.value).to_string());
             }
-            None
-        })
+        }
+        None
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn soap_response_with_result(result: &str) -> String {
+        format!(
+            r#"<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+    <s:Body>
+        <u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+            <Result>{}</Result>
+        </u:BrowseResponse>
+    </s:Body>
+</s:Envelope>"#,
+            result
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+        )
+    }
+
+    #[test]
+    fn parses_non_ascii_title_from_cdata() {
+        let didl = r#"<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <container id="series-aeon">
+        <dc:title><![CDATA[Æon Flux]]></dc:title>
+    </container>
+</DIDL-Lite>"#;
+
+        let (items, mappings) = parse_didl_response(&soap_response_with_result(didl)).unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Æon Flux");
+        assert_eq!(
+            mappings,
+            vec![("Æon Flux".to_string(), "series-aeon".to_string())]
+        );
+    }
+
+    #[test]
+    fn port_scan_candidates_cover_full_private_subnet() {
+        let candidates = port_scan_host_suffixes();
+
+        assert!(candidates.contains(&31));
+        assert!(candidates.contains(&1));
+        assert!(candidates.contains(&254));
+        assert!(!candidates.contains(&0));
+        assert!(!candidates.contains(&255));
+        assert_eq!(candidates.len(), 254);
+    }
+
+    #[test]
+    fn ssdp_search_targets_include_media_servers() {
+        let targets: Vec<String> = ssdp_search_targets()
+            .into_iter()
+            .map(|target| target.to_string())
+            .collect();
+
+        assert_eq!(
+            targets,
+            vec![
+                "upnp:rootdevice".to_string(),
+                "urn:schemas-upnp-org:device:MediaServer:1".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn deduplicates_dlna_and_direct_plex_entries_by_base_url() {
+        let dlna = UpnpDevice {
+            name: "Plex Media Server: nasuntu".to_string(),
+            location: "http://192.168.1.31:32469/DeviceDescription.xml".to_string(),
+            base_url: "http://192.168.1.31:32400".to_string(),
+            device_client: Some("urn:schemas-upnp-org:device:MediaServer:1".to_string()),
+            content_directory_url: Some(
+                "http://192.168.1.31:32469/ContentDirectory/control.xml".to_string(),
+            ),
+        };
+        let direct = UpnpDevice {
+            name: "Plex Server (192.168.1.31:32400)".to_string(),
+            location: "http://192.168.1.31:32400".to_string(),
+            base_url: "http://192.168.1.31:32400".to_string(),
+            device_client: Some("DirectScan".to_string()),
+            content_directory_url: None,
+        };
+
+        assert!(is_same_discovered_device(&dlna, &direct));
+    }
+
+    #[test]
+    fn plex_dlna_scan_entries_use_plex_http_base_url() {
+        let friendly_name = "Plex Media Server: nasuntu";
+        let desc_text = "<manufacturer>Plex, Inc.</manufacturer>";
+        let ip = "192.168.1.31";
+        let dlna_url = format!("http://{}:32469", ip);
+        let base_url = dlna_device_base_url(ip, &dlna_url, friendly_name, desc_text);
+
+        assert_eq!(base_url, "http://192.168.1.31:32400");
+    }
 }

@@ -36,7 +36,7 @@ const LOG_KEY: &str = "l: logs";
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     // Check if we have errors to show
-    let has_errors = app.last_error.is_some() || !app.discovery_errors.is_empty();
+    let has_errors = has_displayable_errors(app);
 
     // Get help text based on current state
     let help_text = match app.state {
@@ -299,16 +299,17 @@ fn draw_server_info_panel(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_error_panel(f: &mut Frame, app: &App, area: Rect) {
     let mut error_lines = Vec::new();
-    
-    if !app.discovery_errors.is_empty() {
+
+    let errors = displayable_errors(app);
+    if !errors.is_empty() {
         // Show ALL errors with numbering for easy selection
-        for (i, error) in app.discovery_errors.iter().enumerate() {
+        for (i, error) in errors.iter().enumerate() {
             error_lines.push(Line::from(vec![
                 Span::styled(format!("{}. ", i + 1), Style::default().fg(Color::Yellow)),
-                Span::raw(error),
+                Span::raw(*error),
             ]));
         }
-        
+
         error_lines.push(Line::from(""));
         error_lines.push(Line::from(vec![
             Span::styled("Press 'e' to copy", Style::default().fg(Color::Cyan)),
@@ -321,6 +322,29 @@ fn draw_error_panel(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(errors, area);
 }
 
+fn has_displayable_errors(app: &App) -> bool {
+    !displayable_errors(app).is_empty()
+}
+
+fn displayable_errors(app: &App) -> Vec<&str> {
+    let mut errors = Vec::new();
+
+    for error in &app.discovery_errors {
+        let error = error.trim();
+        if !error.is_empty() {
+            errors.push(error);
+        }
+    }
+
+    if let Some(error) = &app.last_error {
+        let error = error.trim();
+        if !error.is_empty() && !errors.contains(&error) {
+            errors.push(error);
+        }
+    }
+
+    errors
+}
 
 fn draw_main_content(f: &mut Frame, app: &App, area: Rect) {
     match app.state {
@@ -801,4 +825,26 @@ fn draw_log_pane(f: &mut Frame, app: &mut App, area: Rect) {
     let footer = Paragraph::new(Line::from(footer_content))
         .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, footer_area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn displayable_errors_ignores_blank_error_strings() {
+        let log_buffer = Arc::new(Mutex::new(VecDeque::new()));
+        let mut app = App::new(log_buffer);
+
+        app.last_error = Some("   ".to_string());
+        app.discovery_errors = vec!["".to_string(), "No UPnP ContentDirectory service available".to_string()];
+
+        assert_eq!(
+            displayable_errors(&app),
+            vec!["No UPnP ContentDirectory service available"]
+        );
+        assert!(has_displayable_errors(&app));
+    }
 }

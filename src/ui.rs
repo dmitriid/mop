@@ -108,7 +108,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         };
 
         // Title
-        let title = Paragraph::new("MOP - UPnP Device Explorer")
+        let title = Paragraph::new(title_text(app))
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
             .block(Block::default().borders(Borders::ALL));
         f.render_widget(title, title_area);
@@ -154,6 +154,25 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     if app.show_config {
         draw_config_modal(f, app);
     }
+}
+
+fn title_text(app: &App) -> String {
+    match app.state {
+        AppState::DirectoryBrowser => app
+            .selected_server
+            .and_then(|server_idx| app.servers.get(server_idx))
+            .map(|server| clean_server_name(&server.name).to_string())
+            .unwrap_or_else(|| "MOP - UPnP Device Explorer".to_string()),
+        AppState::ServerList => "MOP - UPnP Device Explorer".to_string(),
+    }
+}
+
+fn padded_title(title: impl Into<String>) -> String {
+    padded_title_text(title)
+}
+
+fn padded_title_text(title: impl Into<String>) -> String {
+    format!(" {} ", title.into())
 }
 
 fn draw_file_info_panel(f: &mut Frame, app: &App, area: Rect) {
@@ -223,7 +242,7 @@ fn draw_file_info_panel(f: &mut Frame, app: &App, area: Rect) {
     }
     
     let info = Paragraph::new(info_lines)
-        .block(Block::default().borders(Borders::ALL).title("File Info"))
+        .block(Block::default().borders(Borders::ALL).title(padded_title("File Info")))
         .wrap(ratatui::widgets::Wrap { trim: true });
     f.render_widget(info, area);
 }
@@ -295,7 +314,7 @@ fn draw_server_info_panel(f: &mut Frame, app: &App, area: Rect) {
     }
     
     let info = Paragraph::new(info_lines)
-        .block(Block::default().borders(Borders::ALL).title("Server Info"))
+        .block(Block::default().borders(Borders::ALL).title(padded_title("Server Info")))
         .wrap(ratatui::widgets::Wrap { trim: true });
     f.render_widget(info, area);
 }
@@ -320,7 +339,7 @@ fn draw_error_panel(f: &mut Frame, app: &App, area: Rect) {
     }
     
     let errors = Paragraph::new(error_lines)
-        .block(Block::default().borders(Borders::ALL).title("Errors"))
+        .block(Block::default().borders(Borders::ALL).title(padded_title("Errors")))
         .wrap(ratatui::widgets::Wrap { trim: true });
     f.render_widget(errors, area);
 }
@@ -373,11 +392,7 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect) {
                     };
                     
                     // Extract clean device name (remove bracketed info)
-                    let clean_name = if let Some(bracket_pos) = server.name.find(" [") {
-                        &server.name[..bracket_pos]
-                    } else {
-                        &server.name
-                    };
+                    let clean_name = clean_server_name(&server.name);
                     
                     ListItem::new(Line::from(vec![
                         Span::styled(clean_name, style),
@@ -393,7 +408,7 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect) {
 
             let list = List::new(items)
                 .block(Block::default()
-                    .title(title)
+                    .title(padded_title(title))
                     .borders(Borders::ALL))
                 .highlight_style(Style::default().bg(Color::DarkGray));
 
@@ -444,7 +459,7 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect) {
 
             let list = List::new(items)
                 .block(Block::default()
-                    .title(format!("Directory: {}", current_path))
+                    .title(padded_title(format!("Directory: {}", current_path)))
                     .borders(Borders::ALL))
                 .highlight_style(Style::default().bg(Color::DarkGray));
 
@@ -456,6 +471,14 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect) {
             // Draw file info panel
             draw_file_info_panel(f, app, info_area);
         },
+    }
+}
+
+fn clean_server_name(name: &str) -> &str {
+    if let Some(bracket_pos) = name.find(" [") {
+        &name[..bracket_pos]
+    } else {
+        name
     }
 }
 
@@ -518,8 +541,8 @@ fn draw_help_modal(f: &mut Frame) {
 
     let paragraph = Paragraph::new(help_text)
         .block(Block::default()
-            .title("Help")
-            .title_bottom("Press ? or Esc to close")
+            .title(padded_title("Help"))
+            .title_bottom(padded_title("Press ? or Esc to close"))
             .borders(Borders::ALL)
             .style(Style::default().bg(Color::Black)))
         .alignment(Alignment::Center);
@@ -586,7 +609,7 @@ fn draw_config_modal(f: &mut Frame, app: &App) {
     // Clear just the modal area for clean overlay
     f.render_widget(Clear, modal_area);
     let block = Block::default()
-        .title("Configuration")
+        .title(padded_title("Configuration"))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan))
@@ -624,7 +647,7 @@ fn draw_config_modal(f: &mut Frame, app: &App) {
     
     let run_input = Paragraph::new(app.config_editor.run_input.value())
         .block(Block::default()
-            .title("Media Player Command")
+            .title(padded_title("Media Player Command"))
             .borders(Borders::ALL)
             .border_style(run_border_style));
     f.render_widget(run_input, input_line);
@@ -750,7 +773,7 @@ fn draw_log_pane(f: &mut Frame, app: &mut App, area: Rect) {
     };
 
     let log_widget = Paragraph::new(log_lines)
-        .block(Block::default().borders(Borders::ALL).title(title));
+        .block(Block::default().borders(Borders::ALL).title(padded_title(title)));
     f.render_widget(log_widget, log_content_area);
 
     // Footer with filter
@@ -797,5 +820,37 @@ mod tests {
             vec!["No UPnP ContentDirectory service available"]
         );
         assert!(has_displayable_errors(&app));
+    }
+
+    #[test]
+    fn title_uses_selected_server_name_while_browsing() {
+        let log_buffer = Arc::new(Mutex::new(VecDeque::new()));
+        let mut app = App::new(log_buffer);
+        app.state = AppState::DirectoryBrowser;
+        app.selected_server = Some(0);
+        app.servers.push(crate::upnp::UpnpDevice {
+            name: "Plex Media Server: nasuntu [urn:schemas-upnp-org:device:MediaServer:1]".to_string(),
+            location: "http://192.168.1.31:32469/DeviceDescription.xml".to_string(),
+            base_url: "http://192.168.1.31:32400".to_string(),
+            device_client: Some("Plex DLNA".to_string()),
+            content_directory_url: Some(
+                "http://192.168.1.31:32469/ContentDirectory/control.xml".to_string(),
+            ),
+        });
+
+        assert_eq!(title_text(&app), "Plex Media Server: nasuntu");
+    }
+
+    #[test]
+    fn padded_title_adds_space_on_both_sides() {
+        assert_eq!(padded_title_text("Server Info"), " Server Info ");
+        assert_eq!(
+            padded_title_text("Directory: /Video"),
+            " Directory: /Video "
+        );
+        assert_eq!(
+            padded_title_text("Press ? or Esc to close"),
+            " Press ? or Esc to close "
+        );
     }
 }

@@ -10,7 +10,6 @@ use tui_input::Input;
 pub enum AppState {
     ServerList,
     DirectoryBrowser,
-    FileDetails,
 }
 
 pub struct App {
@@ -20,7 +19,6 @@ pub struct App {
     pub current_directory: Vec<String>,
     pub directory_contents: Vec<DirectoryItem>,
     pub selected_item: Option<usize>,
-    pub status_message: String,
     pub last_error: Option<String>,
     pub discovery_errors: Vec<String>,
     discovery_receiver: Option<Receiver<DiscoveryMessage>>,
@@ -96,7 +94,6 @@ impl App {
             current_directory: Vec::new(),
             directory_contents: Vec::new(),
             selected_item: None,
-            status_message: "".to_string(),
             last_error: None,
             discovery_errors: Vec::new(),
             discovery_receiver: None,
@@ -179,12 +176,6 @@ impl App {
                             self.last_error = None;
                         }
                     }
-                    DiscoveryMessage::Error(error) => {
-                        self.discovery_errors.push(error.clone());
-                        // Always show the latest error
-                        self.last_error = Some(error);
-                        // Don't stop discovery on individual errors - continue until AllComplete
-                    }
                 }
             }
         }
@@ -192,16 +183,6 @@ impl App {
         if should_clear_receiver {
             self.discovery_receiver = None;
         }
-    }
-
-    pub fn refresh_servers(&mut self) {
-        // Clear existing state and restart discovery
-        self.servers.clear();
-        self.discovery_errors.clear();
-        self.last_error = None;
-        self.discovery_receiver = None;
-        self.is_discovering = false;
-        self.start_discovery();
     }
 
     pub fn previous(&mut self) {
@@ -224,7 +205,6 @@ impl App {
                     };
                 }
             },
-            _ => {}
         }
     }
 
@@ -248,7 +228,6 @@ impl App {
                     };
                 }
             },
-            _ => {}
         }
     }
 
@@ -286,10 +265,6 @@ impl App {
                     }
                 }
             },
-            AppState::FileDetails => {
-                self.state = AppState::DirectoryBrowser;
-            }
-
         }
     }
 
@@ -302,9 +277,6 @@ impl App {
                     self.current_directory.pop();
                     self.load_directory();
                 }
-            },
-            AppState::FileDetails => {
-                self.state = AppState::DirectoryBrowser;
             },
             _ => {}
         }
@@ -324,17 +296,6 @@ impl App {
                 self.selected_item = if self.directory_contents.is_empty() { None } else { Some(0) };
             }
         }
-    }
-
-    pub fn get_selected_file_url(&self) -> Option<String> {
-        if let AppState::FileDetails = self.state {
-            if let Some(item_idx) = self.selected_item {
-                if item_idx < self.directory_contents.len() {
-                    return self.directory_contents[item_idx].url.clone();
-                }
-            }
-        }
-        None
     }
 
     pub fn play_selected_file(&mut self) -> Result<(), String> {
@@ -360,10 +321,6 @@ impl App {
             }
         }
         Err("No file selected".to_string())
-    }
-
-    fn invoke_mpv(&self, url: &str) -> Result<(), String> {
-        self.invoke_player(url)
     }
 
     fn invoke_player(&self, url: &str) -> Result<(), String> {
@@ -393,21 +350,6 @@ impl App {
         }
     }
     
-    fn get_container_id(&self, path: &[String]) -> String {
-        if path.is_empty() {
-            "0".to_string() // Root container
-        } else {
-            self.container_id_map.get(path).cloned().unwrap_or_else(|| {
-                // This should not happen in correct implementation
-                "0".to_string()
-            })
-        }
-    }
-    
-    fn set_container_id(&mut self, path: &[String], container_id: String) {
-        self.container_id_map.insert(path.to_vec(), container_id);
-    }
-
     pub fn open_config_editor(&mut self) {
         self.show_config = true;
         self.config_editor = ConfigEditor::new(&self.config);

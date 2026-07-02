@@ -14,7 +14,6 @@ struct KeyMappings {
     select_server: &'static str,
     open: &'static str,
     back: &'static str,
-    back_to_directory: &'static str,
     help: &'static str,
     quit: &'static str,
 }
@@ -24,7 +23,6 @@ const KEYS: KeyMappings = KeyMappings {
     select_server: "enter: select server",
     open: "enter: play/open",
     back: "backspace: back",
-    back_to_directory: "enter: back to directory",
     help: "?: help",
     quit: "q: quit",
 };
@@ -51,8 +49,6 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         },
         AppState::DirectoryBrowser => format!("{} | {} | {} | {} | {} | {} | {}",
             KEYS.navigate, KEYS.open, KEYS.back, LOG_KEY, CONFIG_KEY, KEYS.help, KEYS.quit),
-        AppState::FileDetails => format!("{} | {} | {} | {} | {}",
-            KEYS.back_to_directory, LOG_KEY, CONFIG_KEY, KEYS.help, KEYS.quit),
     };
 
     // Determine if log pane is visible
@@ -243,6 +239,13 @@ fn draw_server_info_panel(f: &mut Frame, app: &App, area: Rect) {
                 Span::styled("Name: ", Style::default().fg(Color::Cyan)),
                 Span::raw(&server.name),
             ]));
+
+            if let Some(device_client) = &server.device_client {
+                info_lines.push(Line::from(vec![
+                    Span::styled("Type: ", Style::default().fg(Color::Cyan)),
+                    Span::raw(device_client),
+                ]));
+            }
             
             info_lines.push(Line::from(""));
             
@@ -453,58 +456,6 @@ fn draw_main_content(f: &mut Frame, app: &App, area: Rect) {
             // Draw file info panel
             draw_file_info_panel(f, app, info_area);
         },
-        AppState::FileDetails => {
-            if let Some(item_idx) = app.selected_item {
-                if item_idx < app.directory_contents.len() {
-                    let item = &app.directory_contents[item_idx];
-                    
-                    let mut details = vec![
-                        Line::from(vec![
-                            Span::styled("File: ", Style::default().fg(Color::Cyan)),
-                            Span::raw(&item.name),
-                        ]),
-                    ];
-
-                    if let Some(url) = &item.url {
-                        details.push(Line::from(vec![
-                            Span::styled("Direct URL: ", Style::default().fg(Color::Green)),
-                            Span::raw(url),
-                        ]));
-                    }
-
-                    if let Some(metadata) = &item.metadata {
-                        if let Some(size) = metadata.size {
-                            details.push(Line::from(vec![
-                                Span::styled("Size: ", Style::default().fg(Color::Yellow)),
-                                Span::raw(format_size(size)),
-                            ]));
-                        }
-                        
-                        if let Some(duration) = &metadata.duration {
-                            details.push(Line::from(vec![
-                                Span::styled("Duration: ", Style::default().fg(Color::Yellow)),
-                                Span::raw(duration),
-                            ]));
-                        }
-                        
-                        if let Some(format) = &metadata.format {
-                            details.push(Line::from(vec![
-                                Span::styled("Format: ", Style::default().fg(Color::Yellow)),
-                                Span::raw(format),
-                            ]));
-                        }
-                    }
-
-                    let paragraph = Paragraph::new(details)
-                        .block(Block::default()
-                            .title("File Details")
-                            .borders(Borders::ALL));
-                    
-                    f.render_widget(paragraph, area);
-                }
-            }
-        }
-
     }
 }
 
@@ -655,7 +606,7 @@ fn draw_config_modal(f: &mut Frame, app: &App) {
         .split(inner_area)[..] else { return };
 
     // Simple vertical layout for fields
-    let [input_line, checkbox_line, spacing] = Layout::default()
+    let [input_line, checkbox_line, _] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),  // Input with border

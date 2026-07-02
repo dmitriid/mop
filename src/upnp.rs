@@ -22,7 +22,6 @@ pub enum DiscoveryMessage {
     Phase2Complete, // Extended discovery complete
     Phase3Complete, // Port scan complete
     AllComplete(Vec<UpnpDevice>),
-    Error(String),
 }
 
 pub fn start_discovery() -> Receiver<DiscoveryMessage> {
@@ -44,11 +43,10 @@ async fn discover_with_rupnp(sender: Sender<DiscoveryMessage>) {
 
     // Run SSDP discovery and port scan in PARALLEL
     let ssdp_sender = sender.clone();
-    let port_scan_sender = sender.clone();
 
     let (ssdp_result, port_scan_result) = tokio::join!(
         ssdp_discovery(ssdp_sender),
-        targeted_port_scan_parallel(port_scan_sender)
+        targeted_port_scan_parallel()
     );
 
     // Collect SSDP devices
@@ -173,9 +171,7 @@ fn ssdp_search_targets() -> Vec<SearchTarget> {
     ]
 }
 
-async fn targeted_port_scan_parallel(
-    _sender: Sender<DiscoveryMessage>,
-) -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error + Send + Sync>> {
+async fn targeted_port_scan_parallel() -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error + Send + Sync>> {
     log::debug!(target: "mop::upnp", "Starting parallel port scan");
 
     let network_base = match get_local_network() {
@@ -228,40 +224,6 @@ async fn targeted_port_scan_parallel(
     }
 
     log::info!(target: "mop::upnp", "Port scan complete: {} devices found", devices.len());
-    Ok(devices)
-}
-
-async fn targeted_port_scan() -> Result<Vec<UpnpDevice>, Box<dyn std::error::Error>> {
-    let mut devices = Vec::new();
-
-    // Get local network range
-    let network_base = match get_local_network() {
-        Some(base) => {
-            log::debug!(target: "mop::upnp", "Port scan using network range {}.x", base);
-            base
-        }
-        None => {
-            log::warn!(target: "mop::upnp", "Could not determine local network range");
-            return Ok(devices);
-        }
-    };
-
-    // Scan common IP suffixes for media server ports
-    // 21 first since that's a common Plex location
-    let promising_ips = port_scan_host_suffixes();
-    let media_ports = vec![32469, 32400, 8096, 8920]; // Plex DLNA, Plex Web, Jellyfin, Emby
-
-    for ip_suffix in promising_ips {
-        let ip = format!("{}.{}", network_base, ip_suffix);
-        for &port in &media_ports {
-            log::debug!(target: "mop::upnp", "Scanning {}:{}", ip, port);
-            if let Some(device) = scan_single_endpoint(&ip, port).await {
-                log::info!(target: "mop::upnp", "Port scan found device at {}:{}", ip, port);
-                devices.push(device);
-            }
-        }
-    }
-
     Ok(devices)
 }
 
@@ -504,44 +466,6 @@ fn dlna_device_base_url(
     }
 }
 
-// Public API functions - simplified blocking version
-pub fn discover_plex_servers() -> (Vec<PlexServer>, Vec<String>) {
-    let receiver = start_discovery();
-
-    let mut devices = Vec::new();
-    let mut errors = Vec::new();
-
-    let timeout_duration = Duration::from_secs(10);
-    let start = std::time::Instant::now();
-
-    while start.elapsed() < timeout_duration {
-        match receiver.try_recv() {
-            Ok(message) => match message {
-                DiscoveryMessage::DeviceFound(device) => {
-                    devices.push(device);
-                }
-                DiscoveryMessage::AllComplete(final_devices) => {
-                    return (final_devices, errors);
-                }
-                DiscoveryMessage::Error(e) => {
-                    errors.push(e);
-                }
-                _ => {} // Ignore intermediate phase completions
-            },
-            Err(std::sync::mpsc::TryRecvError::Empty) => {
-                std::thread::sleep(Duration::from_millis(50));
-            }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
-        }
-    }
-
-    if devices.is_empty() && errors.is_empty() {
-        errors.push("Discovery timed out".to_string());
-    }
-
-    (devices, errors)
-}
-
 // Directory browsing implementation
 pub fn browse_directory(
     server: &PlexServer,
@@ -640,19 +564,6 @@ async fn async_browse_directory(
     (items, if error.is_empty() { None } else { Some(error) })
 }
 
-fn format_duration(milliseconds: u64) -> String {
-    let seconds = milliseconds / 1000;
-    let hours = seconds / 3600;
-    let minutes = (seconds % 3600) / 60;
-    let secs = seconds % 60;
-
-    if hours > 0 {
-        format!("{}:{:02}:{:02}", hours, minutes, secs)
-    } else {
-        format!("{}:{:02}", minutes, secs)
-    }
-}
-
 #[derive(Debug, Clone)]
 struct UpnpItem {
     id: String,
@@ -704,7 +615,11 @@ async fn browse_upnp_content_directory_with_id(
 
     if !status.is_success() {
         let error_text = response.text().await.unwrap_or_default();
-        return Err(format!("UPnP SOAP request failed with status: {}", status).into());
+        return Err(format!(
+            "UPnP SOAP request failed with status: {}; body: {}",
+            status, error_text
+        )
+        .into());
     }
 
     let response_text = response.text().await?;
@@ -715,64 +630,6 @@ async fn browse_upnp_content_directory_with_id(
     }
 
     parse_didl_response(&response_text)
-}
-
-async fn browse_upnp_content_directory(
-    content_dir_url: &str,
-    path: &[String],
-) -> Result<Vec<UpnpItem>, Box<dyn std::error::Error>> {
-    // For now, always use root container ID
-    // This is a temporary fix - proper implementation would track container IDs
-    let container_id = "0";
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()?;
-
-    // SOAP request for UPnP ContentDirectory Browse action
-    let soap_action = "urn:schemas-upnp-org:service:ContentDirectory:1#Browse";
-    let soap_body = format!(
-        r#"<?xml version="1.0" encoding="utf-8"?>
-<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
-    <s:Body>
-        <u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
-            <ObjectID>{}</ObjectID>
-            <BrowseFlag>BrowseDirectChildren</BrowseFlag>
-            <Filter>*</Filter>
-            <StartingIndex>0</StartingIndex>
-            <RequestedCount>100</RequestedCount>
-            <SortCriteria></SortCriteria>
-        </u:Browse>
-    </s:Body>
-</s:Envelope>"#,
-        container_id
-    );
-
-    let response = client
-        .post(content_dir_url)
-        .header("Content-Type", "text/xml; charset=utf-8")
-        .header("SOAPAction", format!("\"{}\"", soap_action))
-        .header("User-Agent", "MOP/1.0")
-        .body(soap_body)
-        .send()
-        .await?;
-
-    let status = response.status();
-
-    if !status.is_success() {
-        let error_text = response.text().await.unwrap_or_default();
-        return Err(format!("UPnP SOAP request failed with status: {}", status).into());
-    }
-
-    let response_text = response.text().await?;
-
-    // Check for SOAP faults
-    if response_text.contains("soap:Fault") || response_text.contains("SOAP-ENV:Fault") {
-        return Err(format!("UPnP SOAP fault in response: {}", response_text).into());
-    }
-
-    let (items, _) = parse_didl_response(&response_text)?;
-    Ok(items)
 }
 
 fn extract_didl_from_soap(soap_xml: &str) -> Result<String, Box<dyn std::error::Error>> {
